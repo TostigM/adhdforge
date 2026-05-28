@@ -1,0 +1,35 @@
+// Focus Forge — Prisma Schema
+// ─────────────────────────────────────────────────────────────────────────────
+// M1: Minimal stub for connection validation.
+// Full schema (41 tables) is added incrementally starting in M2.
+// Canonical schema spec: files/04-mysql-schema.md
+//
+// Conventions (per AGENTS.md §5.3 and 04-mysql-schema.md §2):
+//   • Primary keys: cuid() stored as VARCHAR(30). NOT UUID. NOT BINARY(16).
+//   • Column names: snake_case via @map()
+//   • Table names: snake_case via @@map()
+//   • Timestamps: created_at / updated_at on every table
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+  // No output directive: generates to node_modules/.prisma/client (default).
+  // Running `pnpm db:generate` from the monorepo root covers all packages.
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users (stub) ────────────────────────────────────────────────────────────
+// Full user model added in M2 per 04-mysql-schema.md §4.1.
+// This stub exists only to validate the DB connection and run the first migration.
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}

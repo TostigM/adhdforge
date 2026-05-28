@@ -1,0 +1,8 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Water glass">
+  <title>Water</title>
+  <desc>A tapered drinking glass partly filled with water. Nourishment HUD icon for Focus Forge.</desc>
+  <path d="M18 12 L46 12 L42 54 Q41 58 37 58 L27 58 Q23 58 22 54 Z" fill="#1e293b" stroke="#7dd3c0" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M20 34 L44 34 L41 53 Q40 56 37 56 L27 56 Q24 56 23 53 Z" fill="#5eead4" opacity="0.55"/>
+  <path d="M20 34 Q26 31 32 34 Q38 37 44 34 L44 36 Q38 39 32 36 Q26 33 20 36 Z" fill="#7dd3c0" opacity="0.8"/>
+  <ellipse cx="26" cy="20" rx="2.5" ry="5" fill="#ffffff" opacity="0.5"/>
+</svg>

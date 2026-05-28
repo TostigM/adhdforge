@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Biddy Animation: Cat / Laptop / MAIN (typing)
+  Self-contained animated SVG. Animates standalone (open in browser) and when inlined in HTML.
+  Part of the Biddy weighted-random animation system. See animation-manifest.json + biddy-animation-selector.ts.
+
+  Naming: cat-laptop-main.svg  (the "main" / default action, highest selection weight)
+  Shared base: cat head + tail + laptop (parallelogram screen, left end higher; triangle keyboard off right end)
+  This variation's overlay: both paws tapping the keyboard, independent irregular timing.
+
+  Accessibility: all motion disabled under prefers-reduced-motion (see <style>).
+  Palette: design-system tokens only. No red.
+-->
+<svg width="240" height="232" viewBox="30 30 240 232" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Biddy cat typing on a laptop">
+  <title>Biddy Cat — typing on laptop</title>
+  <desc>A cat seen from behind-left, facing its laptop, paws tapping the keyboard as if typing. Tail sways, eyes blink.</desc>
+  <style>
+    @keyframes pwA { 0%{transform:translateY(0);} 13%{transform:translateY(-5px);} 24%{transform:translateY(0);} 50%{transform:translateY(0);} 57%{transform:translateY(-3px);} 65%{transform:translateY(0);} 100%{transform:translateY(0);} }
+    @keyframes pwB { 0%{transform:translateY(0);} 20%{transform:translateY(-4px);} 30%{transform:translateY(0);} 40%{transform:translateY(-5px);} 50%{transform:translateY(0);} 78%{transform:translateY(0);} 86%{transform:translateY(-3px);} 93%{transform:translateY(0);} 100%{transform:translateY(0);} }
+    @keyframes tl { 0%,100%{transform:rotate(0deg);} 50%{transform:rotate(12deg);} }
+    @keyframes bl { 0%,92%,100%{transform:scaleY(1);} 96%{transform:scaleY(0.08);} }
+    @keyframes bob { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-1.5px);} }
+    .pwA{animation:pwA .84s ease-in-out infinite;transform-origin:center;}
+    .pwB{animation:pwB 1.09s ease-in-out infinite;transform-origin:center;}
+    .tl{animation:tl 4.3s ease-in-out infinite;transform-origin:188px 140px;}
+    .ey{animation:bl 5.5s ease-in-out infinite;transform-origin:140px 102px;}
+    .hd{animation:bob 3.1s ease-in-out infinite;transform-origin:150px 96px;}
+    @media (prefers-reduced-motion:reduce){.pwA,.pwB,.tl,.ey,.hd{animation:none;}}
+  </style>
+
+  <ellipse cx="150" cy="232" rx="100" ry="26" fill="#0f172a" opacity="0.32"/>
+
+  <!-- BASE: tail -->
+  <g class="tl">
+    <path d="M180 142 Q218 136 224 110 Q226 96 214 96" stroke="#c8a06a" stroke-width="13" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- BASE: head -->
+  <g class="hd">
+    <path d="M126 86 L114 56 L139 72 Z" fill="#c8a06a"/>
+    <path d="M170 82 L186 56 L160 72 Z" fill="#c8a06a"/>
+    <path d="M129 82 L124 64 L139 74 Z" fill="#9a6f48"/>
+    <path d="M168 78 L181 62 L159 72 Z" fill="#9a6f48"/>
+    <ellipse cx="148" cy="94" rx="40" ry="34" fill="#c8a06a"/>
+    <path d="M120 90 Q128 120 148 124 Q140 102 130 90 Z" fill="#b08a56" opacity="0.5"/>
+    <ellipse cx="132" cy="106" rx="20" ry="14" fill="#dab87f" opacity="0.65"/>
+    <g class="ey">
+      <ellipse cx="126" cy="102" rx="3.5" ry="5" fill="#1e293b"/>
+      <ellipse cx="142" cy="101" rx="3.5" ry="5" fill="#1e293b"/>
+    </g>
+    <path d="M122 112 L125 116 L129 112 Z" fill="#c76f7a" opacity="0.9"/>
+    <ellipse cx="120" cy="110" rx="5" ry="3" fill="#f4a3a8" opacity="0.4"/>
+    <line x1="118" y1="106" x2="100" y2="103" stroke="#cbd5e1" stroke-width="1" stroke-linecap="round"/>
+    <line x1="118" y1="111" x2="100" y2="113" stroke="#cbd5e1" stroke-width="1" stroke-linecap="round"/>
+  </g>
+
+  <!-- BASE: laptop (parallelogram screen, left higher; triangle keyboard off right end) -->
+  <g>
+    <path d="M108 176 L186 198 L208 188 L130 166 Z" fill="#cdd2d8"/>
+    <path d="M186 198 L208 188 L150 214 L132 206 Z" fill="#b4bac1"/>
+    <ellipse cx="170" cy="198" rx="7" ry="3" fill="#aab0b8"/>
+    <path d="M108 176 L130 166 L130 120 L108 130 Z" fill="#5f6874"/>
+    <path d="M130 166 L130 120 L124 117 L124 163 Z" fill="#4c545f"/>
+    <path d="M112 173 L127 166 L127 124 L112 131 Z" fill="#717b88"/>
+  </g>
+
+  <!-- OVERLAY (main): both paws typing -->
+  <g class="pwA"><ellipse cx="138" cy="184" rx="8.5" ry="5.5" fill="#c8a06a"/><ellipse cx="138" cy="186" rx="5.5" ry="3" fill="#dab87f"/></g>
+  <g class="pwB"><ellipse cx="168" cy="192" rx="8.5" ry="5.5" fill="#c8a06a"/><ellipse cx="168" cy="194" rx="5.5" ry="3" fill="#dab87f"/></g>
+</svg>

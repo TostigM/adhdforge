@@ -1,0 +1,34 @@
+{
+  "$comment": "Biddy animation manifest. Maps each (creature × activity) context to a weighted list of animation files. The app's weighted-random selector reads this to pick which animation to play. v1 ships only cat-laptop with 5 real files; the remaining 7 slots are placeholders (copy a real file and rename it, replace later). Weights need not sum to 100 — the selector normalizes them.",
+
+  "version": 1,
+
+  "defaults": {
+    "$comment": "Default weighting template applied to any context unless overridden. Slot 00 (main) is heavily weighted; the 11 variations split the remainder.",
+    "mainWeight": 56,
+    "variationWeight": 4
+  },
+
+  "contexts": {
+    "cat-laptop": {
+      "creature": "cat",
+      "activity": "computer",
+      "animations": [
+        { "slot": "main",   "file": "cat-laptop-main.svg",   "label": "Typing",            "weight": 56, "placeholder": false },
+        { "slot": "var-01", "file": "cat-laptop-var-01.svg", "label": "Sipping coffee",    "weight": 4,  "placeholder": false },
+        { "slot": "var-02", "file": "cat-laptop-var-02.svg", "label": "Stretching",        "weight": 4,  "placeholder": false },
+        { "slot": "var-03", "file": "cat-laptop-var-03.svg", "label": "Moving the mouse",  "weight": 4,  "placeholder": false },
+        { "slot": "var-04", "file": "cat-laptop-var-04.svg", "label": "Pause and glance",  "weight": 4,  "placeholder": false },
+        { "slot": "var-05", "file": "cat-laptop-var-05.svg", "label": "Placeholder",       "weight": 4,  "placeholder": true },
+        { "slot": "var-06", "file": "cat-laptop-var-06.svg", "label": "Placeholder",       "weight": 4,  "placeholder": true },
+        { "slot": "var-07", "file": "cat-laptop-var-07.svg", "label": "Placeholder",       "weight": 4,  "placeholder": true },
+        { "slot": "var-08", "file": "cat-laptop-var-08.svg", "label": "Placeholder",       "weight": 4,  "placeholder": true },
+        { "slot": "var-09", "file": "cat-laptop-var-09.svg", "label": "Placeholder",       "weight": 4,  "placeholder": true },
+        { "slot": "var-10", "file": "cat-laptop-var-10.svg", "label": "Placeholder",       "weight": 4,  "placeholder": true },
+        { "slot": "var-11", "file": "cat-laptop-var-11.svg", "label": "Placeholder",       "weight": 4,  "placeholder": true }
+      ]
+    },
+
+    "$futureContexts": "Replicate the cat-laptop block for every creature × activity. Creatures: cat, robot, blob, plant, fox, owl. Activities: computer, reading, knitting, cleaning. Naming: {creature}-{activity}-main.svg and {creature}-{activity}-var-NN.svg. 6 creatures × 4 activities × 12 slots = 288 files total at full vision."
+  }
+}

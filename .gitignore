@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+dist/
+.turbo/
+build/
+out/
+
+# Environment — NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Editor and local tooling
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma generated client
+node_modules/.prisma/
+
+# Test coverage
+coverage/
+playwright-report/
+test-results/
