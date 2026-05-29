@@ -13,10 +13,10 @@
     "db:migrate:dev": "prisma migrate dev --schema packages/database/prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema packages/database/prisma/schema.prisma",
     "db:studio": "prisma studio --schema packages/database/prisma/schema.prisma",
-    "test:db": "tsx scripts/test-db-connection.ts",
-    "test:openai": "tsx scripts/test-openai.ts",
-    "test:r2": "tsx scripts/test-r2-connection.ts",
-    "test:resend": "tsx scripts/test-resend.ts"
+    "test:db": "tsx --env-file .env.local scripts/test-db-connection.ts",
+    "test:openai": "tsx --env-file .env.local scripts/test-openai.ts",
+    "test:r2": "tsx --env-file .env.local scripts/test-r2-connection.ts",
+    "test:resend": "tsx --env-file .env.local scripts/test-resend.ts"
   },
   "devDependencies": {
     "@prisma/client": "^6.0.0",

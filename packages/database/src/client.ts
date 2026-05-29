@@ -11,6 +11,9 @@ declare global {
 
 export const prisma: PrismaClient = globalThis.__prisma ?? new PrismaClient();
 
+/** Alias — use `db` throughout the app for brevity. */
+export const db = prisma;
+
 if (process.env['NODE_ENV'] !== 'production') {
   globalThis.__prisma = prisma;
 }

@@ -6,7 +6,14 @@
     "typecheck": "tsc --noEmit"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./admin/permissions": "./src/admin/permissions.ts",
+    "./admin/audit": "./src/admin/audit.ts",
+    "./users/account-state": "./src/users/account-state.ts",
+    "./users/display-name": "./src/users/display-name.ts"
+  },
+  "peerDependencies": {
+    "@prisma/client": "^6.0.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

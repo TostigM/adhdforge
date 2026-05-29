@@ -10,17 +10,23 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@focus-forge/database": "workspace:*",
+    "@focus-forge/domain": "workspace:*",
+    "@next-auth/prisma-adapter": "^1.0.7",
+    "@node-rs/argon2": "^2.0.2",
     "next": "^15.1.0",
+    "next-auth": "^4.24.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@focus-forge/database": "workspace:*"
+    "resend": "^6.12.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
-    "@eslint/eslintrc": "^3.2.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.1.0",
     "postcss": "^8.4.49",
