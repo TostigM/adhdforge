@@ -85,7 +85,7 @@ export const authOptions: NextAuthOptions = {
     signIn: '/signin',
     verifyRequest: '/signin/check-email',
     error: '/signin',
-    newUser: '/onboarding',
+    // newUser: '/onboarding' — onboarding flow comes in a later milestone
   },
 
   providers: [
@@ -189,18 +189,31 @@ export const authOptions: NextAuthOptions = {
     },
 
     // ── signIn callback ─────────────────────────────────────────────────────
-    // Block suspended/deleted users from completing sign-in via OAuth or magic link.
-    async signIn({ user }) {
-      if (!user.id) return true; // Let NextAuth handle the error
+    // Block suspended/deleted users. Activate unverified users on first OAuth sign-in
+    // (Google/email providers verify the email address for us).
+    async signIn({ user, account }) {
+      if (!user.id) return true;
 
       const dbUser = await db.user.findUnique({
         where: { id: user.id },
         select: { accountState: true },
       });
 
-      if (!dbUser) return true; // New user — allow (NextAuth will create them)
+      if (!dbUser) return true;
       if (dbUser.accountState === 'suspended') return '/account/suspended';
       if (dbUser.accountState === 'deleted') return '/signin?error=account_deleted';
+
+      // Activate users who sign in via OAuth or magic link — their email is verified
+      // by the provider. Credentials sign-ins don't verify email on their own.
+      if (
+        dbUser.accountState === 'unverified' &&
+        account?.provider !== 'credentials'
+      ) {
+        await db.user.update({
+          where: { id: user.id },
+          data: { accountState: 'active', emailVerified: new Date() },
+        });
+      }
 
       return true;
     },
