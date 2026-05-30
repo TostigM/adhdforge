@@ -93,7 +93,8 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      allowDangerousEmailAccountLinking: false,
+      // Google verifies email ownership, so linking is safe here.
+      allowDangerousEmailAccountLinking: true,
     }),
 
     // ── Email (magic link via Resend) ───────────────────────────────────────
