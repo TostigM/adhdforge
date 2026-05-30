@@ -130,14 +130,15 @@ model Account {
   provider          String
   providerAccountId String  @map("provider_account_id") @db.VarChar(255)
 
-  // OAuth tokens — required by NextAuth adapter (null for Credentials provider)
-  refreshToken String? @db.Text @map("refresh_token")
-  accessToken  String? @db.Text @map("access_token")
-  expiresAt    Int?    @map("expires_at_unix")
-  tokenType    String? @map("token_type")
-  scope        String?
-  idToken      String? @db.Text @map("id_token")
-  sessionState String? @map("session_state")
+  // OAuth tokens — NextAuth PrismaAdapter passes these exact snake_case names.
+  // Do NOT rename to camelCase — the adapter calls prisma.account.create({ access_token, ... })
+  refresh_token String? @db.Text
+  access_token  String? @db.Text
+  expires_at    Int?
+  token_type    String?
+  scope         String?
+  id_token      String? @db.Text
+  session_state String?
 
   // Our extra fields
   metadata   Json?
