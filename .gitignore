@@ -2,6 +2,10 @@
 node_modules/
 .pnpm-store/
 
+# Logs — never commit
+logs/*.log
+*.log
+
 # Build outputs
 .next/
 dist/
@@ -13,6 +17,9 @@ out/
 .env
 .env.local
 .env.*.local
+.env.local.bak
+env.local.bak
+*.env.bak
 
 # Editor and local tooling
 .vscode/
