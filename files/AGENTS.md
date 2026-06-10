@@ -447,9 +447,391 @@ Earlier discussion identified parasocial-attachment risk with humanoid AI compan
 
 **[DECISION] Gentle Reframe (postponement guardrail).** When a flexible high/med task is swapped out ≥ threshold times (default 4, range 3–7), show ONE blame-free options card (break down / lower priority / anchor it / snooze). Fires once, never nags, no counter shown, no shame, no red. Default ON, fully disable-able, threshold configurable. Exempt: anchors, low, cant_miss.
 
+**[DECISION — IMPLEMENTED] Anchors have their own dedicated schedule strip; they never consume flex slots.**
+- The dashboard shows two distinct sections:
+  1. **Card area** (top): active anchor card(s) + flexible task cards. Total = `visibleSlots` (default 3).
+  2. **"Today's schedule" strip** (bottom): compact single-line view of ALL of today's anchors, sorted by time.
+- Anchors are added to a plan exclusively via `seedAnchors()` in `get-or-create-today-plan.ts` — never by bubble-up.
+- The bubble-up algorithm (`_bubble-up.ts`) queries only `priorityKind: 'flexible'` in Phase 2, and counts only flexible items toward `visibleSlots`.
+- **Doorknob window:** An anchor "promotes" to a full card in the top area when `now >= scheduledFor − 30 min` (constant `DOORKNOB_MINUTES = 30`). While promoted, one fewer flex card is shown — total stays at `visibleSlots`. The strip continues to show all anchors regardless.
+- **Rationale:** Users with 3+ scheduled meetings should still see 3 actionable flexible tasks, not a screen full of unmeetable calendar items.
+
+**[DECISION — IMPLEMENTED] Anchor tasks for future days never appear in today's plan.**
+- `bubbleUp` excludes all anchors from the backlog pull (Phase 2 filter: `priorityKind: 'flexible'`).
+- `seedAnchors` filters by `scheduledFor` within the current plan's UTC day window.
+- Result: tomorrow's meetings don't pollute today's view.
+
 **Inviolable within the loop:** no red, no failed/overdue states, no breakable streaks, no shame, single-column Today (Rules 1, 2, 3, 5, 6). The loop must answer "what now?" without ever overwhelming or shaming.
 
 **Build priority:** Milestone 4.5 — immediately after task capture (M4), BEFORE all goodies (Biddy animations, mini-games, HUD, body doubling). If only one thing ships, it's this.
+
+### 5.14 M1–M4.5 Implementation Record
+
+**Status as of last update:** M1 through M4.5 complete — full core loop, settings, priority picker, and E2E coverage all shipped and verified. Next: M5.
+
+This section is the ground truth for decisions made *during the actual build*, which sometimes differ from or extend the original specs. If you're picking up mid-development, read this carefully before touching any daily-plan code.
+
+---
+
+#### 5.14.1 Database Migrations — `prisma db push` Required
+
+**[CRITICAL]** Bluehost shared hosting does not support shadow databases, which Prisma's `migrate dev` requires. **Never use `prisma migrate dev` on this project.**
+
+Always use:
+```
+pnpm db:push          # = prisma db push (root package.json script)
+```
+
+This syncs the schema directly to the database without migration history files. It is safe for development and the current stage of this project. The `db:migrate:dev` / `db:migrate:deploy` scripts were **removed** from package.json (M4.5 session) to eliminate the footgun; a PreToolUse hook also blocks `prisma migrate dev`.
+
+---
+
+#### 5.14.2 Authentication — Database Sessions (Not JWT)
+
+NextAuth is configured with `strategy: 'database'`. Sessions are stored in the `sessions` table. This means:
+
+- **Auth check in server actions:** use `getServerSession(authOptions)` — do NOT use JWT helpers.
+- `getServerSession` is imported from `'next-auth'`; `authOptions` from `'@/lib/auth'`.
+- The session object has shape `{ user: { id, email, name } }`.
+- Sessions survive page refresh because they hit the DB on each request.
+
+---
+
+#### 5.14.3 Domain Function Pattern — `Result<T, E>`
+
+All functions in `packages/domain/src/` return `Result<T, E>` — never throw, never return raw data.
+
+```typescript
+// packages/domain/src/result.ts
+export type Result<T, E extends string> =
+  | { ok: true; data: T }
+  | { ok: false; error: E; message: string };
+
+export function ok<T>(data: T): Result<T, never> { ... }
+export function err<E extends string>(error: E, message: string): Result<never, E> { ... }
+```
+
+All domain functions accept `db: PrismaClient` as first argument (dependency injection). They never import the Prisma singleton directly.
+
+---
+
+#### 5.14.4 Daily Plan Date — UTC Midnight
+
+`planDate` is always **UTC midnight of the user's current local day**, computed server-side:
+
+```typescript
+const d = new Date();
+d.setUTCHours(0, 0, 0, 0);
+// d is now UTC midnight of today
+```
+
+This is an approximation: users far from UTC may see a slightly wrong day at midnight. A proper implementation would pass the user's timezone from the client. Logged as a known limitation; acceptable for v1.
+
+---
+
+#### 5.14.5 Bubble-Up Algorithm — Key Rules
+
+File: `packages/domain/src/daily-plan/_bubble-up.ts`
+
+**[UPDATED — Session 8] Single unified candidate pool (replaces the old Phase 1 / Phase 2 split).** Bubble-up now pulls from ONE ranked pool — the true backlog: every `priorityKind: 'flexible'`, `status: 'active'` task that isn't already a `slotState: 'today'` card. There is no separate "promote queue items first" phase; a swapped-back task is just another backlog candidate that happens to already have a `DailyPlanItem` row.
+
+- **Candidate ranking (the order things surface):**
+  ```
+  orderBy: [
+    { todaySwapCount: 'asc' },  // not-yet-pushed-back-today tasks first
+    { priorityLevel: 'asc' },   // then enum order: cant_miss → high → med → low
+    { updatedAt: 'asc' },       // then least-recently-touched, for stable cycling
+  ]
+  ```
+- **Why `todaySwapCount` is the PRIMARY key (Session 8 ping-pong fix):** Pushing a task back increments its `todaySwapCount` (the swap-counter write in `swap-today-item.ts`). With swap-count first, a just-pushed-back task drops to the **bottom of the queue** — a *different* task surfaces instead of the same high-priority one boomeranging straight back. Round-robins through the whole backlog; once every task has the same swap count, the pool simply cycles by priority then recency. **Priority alone is NOT enough** — it makes the pushed-back high task the top candidate again (that was the bug).
+- **Anchors are never pulled** (filter excludes non-flexible).
+- **Update-or-create per candidate:** a candidate WITH an existing `queue` plan item (a swapped-back task) is UPDATEd to `today`; one WITHOUT (a never-shown backlog task) gets a fresh `create`. Creates tolerate the **P2002** unique-constraint race (concurrent bubble-up grabbing the same task — e.g. a capture's `router.refresh` racing a 5s sync poll).
+- **Slot counting:** counts only flexible items in `slotState: 'today'`. Anchor items in `'today'` do not count toward `visibleSlots`.
+- **Position:** `MAX(today.position) + 1` for promoted items.
+- **`getTodayView` queue display uses the SAME `orderBy`** so the "All tasks" drawer order matches the order tasks will actually surface (pushed-back tasks shown at the bottom).
+
+```typescript
+export async function bubbleUp(
+  db: PrismaClient,
+  planId: string,
+  userId: string,
+  visibleSlots: number,
+): Promise<void>
+```
+
+---
+
+#### 5.14.6 `get-or-create-today-plan.ts` — Key Behaviors
+
+- **New plan:** calls `seedAnchors()` (today's window only), then `bubbleUp()`.
+- **Existing plan:** counts only **flexible** items in `'today'` state. If `< visibleSlots`, runs `bubbleUp()`. This handles tasks added from another device after the plan was created.
+- `seedAnchors` filters: `priorityKind: 'anchor'`, `status: in ['active', 'deferred']`, `scheduledFor: [dayStart, dayEnd)`.
+
+---
+
+#### 5.14.7 `get-today-view.ts` — Return Shape
+
+Key types (exported from `packages/domain/src/daily-plan/get-today-view.ts`):
+
+```typescript
+export const DOORKNOB_MINUTES = 30; // exported constant
+
+export type ScheduledAnchor = {
+  itemId: string; taskId: string; rawText: string; title: string | null;
+  priorityLevel: 'cant_miss' | 'high' | 'med' | 'low';
+  scheduledFor: Date | null; estimatedMinutes: number | null;
+  isDone: boolean;
+  isActive: boolean; // true when now >= scheduledFor - DOORKNOB_MINUTES
+};
+
+export type TodayViewResult = {
+  planId: string;
+  visibleSlots: number;       // flex-only slot count (default 3)
+  ritualState: 'pending' | 'completed' | 'skipped';
+  todayItems: TodayItem[];    // flex tasks in slotState='today' only
+  scheduledAnchors: ScheduledAnchor[]; // ALL today's anchors for the strip
+  activeAnchorCount: number;  // how many anchors are in the doorknob window
+  queueCount: number;         // flex items in slotState='queue'
+  doneCount: number;          // ALL items in slotState='done' (flex + anchor)
+  ritualSuggestions: RitualSuggestion[];
+};
+```
+
+---
+
+#### 5.14.8 `TodayClient.tsx` — Dashboard Component Layout
+
+File: `apps/web/app/dashboard/_components/TodayClient.tsx`
+
+Render order:
+1. Header (name, subtitle)
+2. Capture form
+3. MorningRitual (when `ritualState === 'pending'`)
+4. **Card area** (section "Right now"): `[...activeAnchors.map(anchorToTodayItem), ...flexToShow]`
+   - `flexToShow = todayItems.slice(0, Math.max(0, visibleSlots - activeAnchors.length))`
+   - Total cards = `visibleSlots` when anchors are active, otherwise up to `visibleSlots` flex cards
+5. **Schedule strip** (section "Today's schedule"): compact list of all `scheduledAnchors`
+   - Active anchors: pulsing accent dot, elevated background
+   - Done anchors: greyed out, strikethrough
+   - Shows `scheduledFor` time + title + estimatedMinutes
+6. Queue counter (border-top divider)
+
+Key helpers in TodayClient:
+- `fmtTime(d: Date | null): string` — formats as "8:30 AM"
+- `anchorToTodayItem(a: ScheduledAnchor): TodayItem` — converts for TodayCard rendering
+
+---
+
+#### 5.14.9 M4.5 — Files Created
+
+**Domain (`packages/domain/src/daily-plan/`):**
+| File | Purpose |
+|------|---------|
+| `_bubble-up.ts` | Internal: fills flex slots from queue then backlog |
+| `get-or-create-today-plan.ts` | Find or create today's plan; seed anchors; run bubble-up |
+| `get-today-view.ts` | Full Today screen data in one call |
+| `complete-today-item.ts` | Mark item done, complete task, run bubble-up, check badges |
+| `swap-today-item.ts` | Move flex item to queue, increment swap count, check reframe |
+| `add-to-today-plan.ts` | Add task to today's plan or queue |
+| `update-ritual-state.ts` | Set ritual to completed or skipped |
+
+**Server actions (`apps/web/server-actions/daily-plan/`):**
+| File | Purpose |
+|------|---------|
+| `get-today-view.ts` | Server action wrapping domain function |
+| `complete-plan-item.ts` | Auth check + call completeTodayItem |
+| `swap-plan-item.ts` | Auth check + call swapTodayItem |
+| `update-ritual.ts` | Auth check + call updateRitualState |
+| `add-to-plan.ts` | Auth check + call addToTodayPlan |
+
+**UI (`apps/web/app/dashboard/`):**
+| File | Purpose |
+|------|---------|
+| `page.tsx` | Server component: calls getOrCreateTodayPlan + getTodayView, renders TodayClient |
+| `_components/TodayClient.tsx` | Client component: full Today home screen |
+| `_components/TodayCard.tsx` | Single task card (anchor or flex) with actions |
+| `_components/MorningRitual.tsx` | Morning ritual flow (skippable) |
+
+**Domain package exports (`packages/domain/package.json`):**
+All 7 daily-plan modules exported as `"./daily-plan/<name>"` paths (added `reframe-today-item` in M4.5 session 2).
+
+**Additional files from M4.5 session 2:**
+- `packages/domain/src/daily-plan/reframe-today-item.ts` — snooze (24h) + lower (priorityLevel→low) reframe actions
+- `packages/domain/src/daily-plan/__tests__/` — 7 test files covering all daily-plan functions (part of the 153-test domain suite)
+- `apps/web/server-actions/daily-plan/reframe-plan-item.ts` — server action for snooze/lower
+- `apps/web/app/dashboard/_components/TodayClient.tsx` — backlog drawer (QueueRow), single-task mode, reframe wired to real actions
+
+**Test files created:**
+| File | Tests |
+|------|-------|
+| `server-actions/tasks/__tests__/complete-task.test.ts` | 5 tests |
+| `server-actions/tasks/__tests__/defer-task.test.ts` | 6 tests |
+| `server-actions/tasks/__tests__/update-task-priority.test.ts` | 8 tests |
+| `lib/sync/__tests__/use-sync-stream.test.ts` | 6 tests (jsdom) |
+
+(The table above lists the original M4 apps/web tests — 84 at that checkpoint.)
+
+**Current test totals (end of M4.5):** **153** domain unit tests across 12 files, plus the apps/web server-action + hook tests listed above, plus **12** Playwright E2E tests. All passing.
+
+---
+
+#### 5.14.10 M4.5 — Known Remaining Work
+
+**Completed since last checkpoint:**
+- ✅ **Domain unit tests** — 153 tests across 12 files (daily-plan + preferences suites)
+- ✅ **"All tasks" backlog drawer** — `QueueItem` type + `queueItems` in `getTodayView`, `QueueRow` component, priority-ranked, capped at 20, overflow note
+- ✅ **Reframe actions** — `snooze` (24h `reframeSnoozedUntil`) and `lower` (`priorityLevel='low'`) are real DB writes via `reframeTodayItem` domain fn + `reframePlanItemAction` server action; `break` and `anchor` are honest forward-pointing toasts (M5+)
+- ✅ **"What should I do now?" single-task mode** — client-side toggle in `TodayClient`; hides all but the top card; "One thing at a time" / "Show everything" button in header
+
+- ✅ **Priority picker at capture** — two-picker row below capture input: (1) Flexible|Anchor kind toggle, (2) Bronze/Silver/Gold level chips visible only when Flexible selected; Anchor shows "Time-pinned · set time in task details" hint instead; Silver/Flexible default; resets after capture
+- ✅ **suppressHydrationWarning on `<body>`** — fixes Grammarly extension causing React hydration mismatch in layout.tsx
+- ✅ **Manual smoke test passed** — capture, ritual, single-task mode, backlog drawer, Done + bubble-up all verified
+
+- ✅ **Settings UI (Today settings)** — account page section with: visible-slots stepper (1–5), Gentle Reframe on/off toggle, threshold slider (3–7). Persists to `user.preferences` JSON via `updateUserPreferences` domain fn + `updatePreferencesAction`. Changing visibleSlots also updates today's `DailyPlan.visibleSlots` immediately. New plans read the preference in `getOrCreateTodayPlan`. Swap action + dashboard `getTodayView` honor the threshold (and disable via `Number.MAX_SAFE_INTEGER` when toggle off). 14 new unit tests (153 total).
+- ✅ **E2E Playwright tests** — 12 scenarios across `apps/web/e2e/today-core.spec.ts` + `today-features.spec.ts`, all passing. Harness in §5.14.12.
+- ✅ **Concurrency fix (found by E2E)** — `bubbleUp` Phase 2 now uses `createMany({ skipDuplicates: true })` instead of per-row `create`. Previously, a capture's `router.refresh()` racing a 5s sync poll could both pull the same backlog task and violate the `(daily_plan_id, task_id)` unique constraint → 500. Would have hit real users.
+
+**M4.5 is complete.** All remaining items done.
+
+---
+
+#### 5.14.11 Environment & Tooling Notes
+
+| Item | Detail |
+|------|--------|
+| Dev server port | `3000` (verify `NEXTAUTH_URL` in `.env.local` matches) |
+| Package manager | `pnpm` — on Windows PowerShell, invoke via `& "$env:APPDATA\npm\pnpm.ps1"` |
+| Run tests | `cd packages/domain && pnpm test` or `cd apps/web && pnpm test` (run per-package, not via turbo) |
+| DB schema changes | `pnpm db:push` (never `migrate dev`) |
+| Daily test reset | `pnpm reset:test` (or `/reset-test-data`) — wipes today's plan + active tasks, seeds 3 anchors + 6 flex. `pnpm reset:test:hard` for a full nuke. Loads `.env.local` itself; dates are dynamic. |
+| Reset a daily plan | `node scripts/reset-today-plan.js` (lighter — plan items only; needs DATABASE_URL set) |
+| Seed tomorrow's anchors | `node scripts/create-tomorrow-anchors.js` |
+
+---
+
+#### 5.14.12 E2E Playwright Harness
+
+**Location:** `apps/web/e2e/`. Config: `apps/web/playwright.config.ts`.
+
+**Run:** `cd apps/web && pnpm test:e2e` (also `:ui`, `:headed`). **The dev server must already be running on :3000** — the config has no `webServer` block (Playwright's auto-spawn was unreliable because `/` 307-redirects for auth, breaking its readiness probe).
+
+**Auth bypass (database sessions):** There is no UI login in the tests. `e2e/global-setup.ts` seeds a dedicated user (`e2e@focusforge.test`) + a `sessions` row, then writes `e2e/.auth/state.json` (gitignored) with the `next-auth.session-token` cookie. Every test starts authenticated via `use.storageState`. `global-teardown.ts` deletes the user + all its data.
+
+**Isolation:** `workers: 1`, `fullyParallel: false` — all specs share the ONE test user, so parallel runs would race on its data. Generous timeouts (60s test / 15s expect) for the slow Bluehost DB.
+
+**Key helpers** (`e2e/helpers/`):
+- `test-user.ts` — `seedTestUser`, `cleanupTestUser`, `createFlexTask`, `resetTestUserData`, `skipRitualForUser`, `addQueueItems`, `getLatestPlanId`, `resetPreferences`. Instantiates its own `PrismaClient` (worker process; loads `.env.local` via `env.ts`).
+- `spec-base.ts` — re-exports `test`/`expect` + helpers, and `gotoDashboardReady(page, userId)` which navigates, skips the morning ritual (so the card area / empty state is what's under test, not the ritual prompt), and reloads.
+
+**Gotchas baked into the specs:**
+- Queue items only exist after a swap; unstarted backlog tasks aren't "queue". To test the drawer, fill all 3 today slots first (else `bubbleUp` promotes the seeded queue items), then `addQueueItems`.
+- Settings writes are optimistic in the UI but commit slowly to the DB — poll the DB (`expect.poll`) before navigating to assert the persisted effect.
+- The dashboard header subtitle also contains "Nothing pressing", so the empty-state assertion matches the unique `/That's allowed/i`.
+
+---
+
+### 5.15 M5 Implementation Record — Walk Me Through It
+
+**Status:** Complete. Manual step creation + full-screen single-step Walk-Through, verified end-to-end (browser + 5 E2E tests).
+
+**Framing (until M7):** Steps are **manual only**. No AI promises. Button copy is "Add steps manually"; the empty state says "Voice-driven step generation coming soon." M7 enhances this, doesn't replace it.
+
+**Domain (`packages/domain/src/tasks/`):**
+| File | Purpose |
+|------|---------|
+| `add-step.ts` | Append a step; `stepOrder = max+1`; validates ownership + text length |
+| `complete-step.ts` | Mark step done → log `task_step.completed` event → `first_step` badge. When the **last** step finishes, auto-completes the task (logs `task.completed` → `first_complete` badge). Idempotent. Returns `{ taskCompleted, newBadges }`. |
+| `reorder-steps.ts` | Takes the full ordered id list. **Two-phase update** inside a transaction (park in a temp range ≥10000, then write 0..n-1) to avoid the `(taskId, stepOrder)` unique-constraint collision. Validates the id set matches exactly. |
+| `delete-step.ts` | Ownership-checked delete; gaps in stepOrder are harmless. |
+| `list-steps.ts` | Ordered read with ownership check. |
+
+37 new unit tests → **190 domain tests total**. All 5 modules exported in `packages/domain/package.json`.
+
+**Server actions (`apps/web/server-actions/tasks/`):** `add-step`, `complete-step`, `reorder-steps`, `delete-step` — auth + revalidate `/tasks/[taskId]`, `/walk/[taskId]`, `/dashboard`.
+
+**UI:**
+- `app/tasks/[taskId]/page.tsx` + `_components/StepsEditor.tsx` — add/reorder/delete steps. **Reorder uses up/down buttons, not drag** (accessibility decision — see roadmap M5 acceptance). Optimistic UI.
+- `app/walk/[taskId]/page.tsx` + `_components/WalkThrough.tsx` — full-screen, one step at a time, "Done. Next step.", Pause + **ESC** return to dashboard (resumes at first incomplete step — position persists because completed steps are saved). Calm 🎉 completion screen.
+- `TodayCard` gained a "Break into steps →" link (flexible tasks only → `/tasks/[taskId]`).
+- `middleware.ts` — added `/walk` to protected paths.
+
+**Badges:** `first_step` (trigger `task_step.completed`) and `first_complete` already seeded in DB; both verified firing.
+
+**E2E:** `apps/web/e2e/walk-through.spec.ts` — 5 scenarios (add step, reorder persists, walk-through auto-completes, ESC-pause-resume, no-steps redirect). **17 E2E tests total.** Helper `createTaskWithSteps` added to `test-user.ts`.
+
+**Known dev-server gotcha (recurring):** Long-running `next dev` occasionally corrupts `.next` incremental chunks (`Cannot find module './vendor-chunks/*.js'` or `'./route-modules/pages/builtin/_error'`). Fix: stop node, delete `apps/web/.next`, restart. Not a code bug.
+
+---
+
+### 5.16 M6 Implementation Record — Analog Timer
+
+**Status:** Complete. Diminishing-wedge focus timer with synthesized Sound Families, vibration, Picture-in-Picture, and badge wiring. Verified end-to-end (browser + 5 E2E).
+
+**Schema:** Added `FocusSession` model (`focus_sessions` table, §4.12): plannedDurationSeconds, actualDurationSeconds, status `running|completed|incomplete|paused` (incomplete is NEUTRAL, never "failed"), soundFamily, timestamps. Relations on User + Task. Pushed via `db:push`.
+
+**Audio = Web Audio synthesis (no asset files).** Sound Families (`soft_chimes`, `singing_bowls`, `pink_noise_pulse`) are parameter specs synthesized client-side in `apps/web/lib/audio/sound-engine.ts`. AudioContext must be unlocked from a user gesture (`unlockAudio()` in the Start handler).
+
+**Domain (`packages/domain/src/timer/`):**
+| File | Purpose |
+|------|---------|
+| `focus-session.ts` | start/pause/resume/end state machine. start→`focus_session.started`→first_focus; end+completed→`focus_session.completed`→focus_complete. Idempotent end. |
+| `wedge.ts` | `computeWedge(elapsed, planned)` → fractionRemaining + zone (`fresh`/`mid`/`soon`) + sweepDegrees. Pure. |
+| `sound-families.ts` | family + variation synthesis specs; `selectNextVariation` (no consecutive-same — anti-habituation). |
+| `vibration-patterns.ts` | `resolveVibration(key, ctx)` → pattern or null (null when haptics off OR prefers-reduced-motion — vibration is motion). |
+| `speed-run-hook.ts` | `checkSpeedRunEligibility` — fires `speed-run:eligible` when 2+ tasks complete in 15 min (opt-in; hooks-only, UI later). |
+
+41 new unit tests → **231 domain tests**. All timer modules exported in package.json.
+
+**UI:**
+- `packages/ui/src/components/AnalogTimer.tsx` — SVG diminishing wedge, zone colours yellow→green→**mauve** (purple, never red), **no digital countdown**, honours prefers-reduced-motion. **Needs `'use client'`** (uses hooks) — a hooks-in-ui component must declare it or Next's build fails (typecheck won't catch this).
+- `app/timer/page.tsx` + `_components/TimerClient.tsx` — setup (presets/custom + sound family + interval) → running/paused (wedge + Pause/Resume/Stop/Pop out) → done (celebration + badges). Tick at 250ms; elapsed tracked client-side across pause via refs.
+- `apps/web/lib/pip/timer-pip.ts` — Picture-in-Picture via `documentPictureInPicture`, canvas wedge, `window.open` popup fallback. **Self-driving:** the pop-out runs its OWN interval (registered on the PiP window via `pipWindow.setInterval`) and counts from an absolute end-time, so it keeps running after the user navigates away from `/timer` (client-side nav tears down the React page but the PiP window + its interval survive). On reaching zero it POSTs `/api/timer/complete` so the session ends + `focus_complete` fires even if the user is elsewhere. Parent calls `pip.pause(remaining)`/`pip.resume(endsAtMs)` while mounted.
+- `app/api/timer/complete/route.ts` — same-origin POST the pop-out calls on completion (idempotent `endFocusSession`).
+- **Navigation handling:** `TimerClient`'s unmount cleanup ends a live session as `incomplete` UNLESS a pop-out is open (then the PiP keeps it alive). No orphaned `running` rows.
+- Timer settings: `TimerSettingsClient` on /account — independent sound + haptics toggles. (`tenThreeRuleEnabled` + `speedRunChallengesEnabled` prefs exist but are intentionally **not surfaced** until M20.)
+- Dashboard nav gained a "⏱ Focus timer" link.
+
+**Scaffolding hooks (hooks-only, fire events; UX lands later):**
+- 10-3 rule: TimerClient fires `recordTenThreeMarkAction` at each 10-min mark when `tenThreeRuleEnabled` (default off) → `ten-three-rule:movement-due` event.
+- Speed Run: `complete-plan-item` action calls `checkSpeedRunEligibility` after each completion (default off).
+
+**Badges:** `first_focus` (start) + `focus_complete` (repeatable, on completion) already seeded; both verified firing.
+
+**Preferences:** `parsePreferences` now also returns `soundEnabled` (default true), `hapticsEnabled` (true), `tenThreeRuleEnabled` (false), `speedRunChallengesEnabled` (false).
+
+**E2E:** `apps/web/e2e/timer.spec.ts` — 6 scenarios incl. **`page.clock.install()` + `runFor`** to fast-forward a 1-min timer to completion (verifies focus_complete badge without waiting real time), and a navigation-ends-neutrally regression test. (The pop-out-keeps-running case is verified manually — PiP needs a real user gesture + a separate window, which automation can't drive.)
+
+---
+
+### 5.17 M7 Implementation Record — Voice Dump + AI Parsing
+
+**Status:** Complete. Hold-to-record → Whisper transcribe → GPT-4o-mini parse → tasks created, with daily quotas. All infra + UI shipped and tested; the real-audio happy path is the human smoke test (it spends OpenAI credits).
+
+**OpenAI:** key lives in `apps/web/.env.local` as `OPENAI_API_KEY` (Next loads it automatically). **Must also be added to Vercel env for prod.** `pnpm test:openai` validates it (script now points at `apps/web/.env.local`).
+
+**`packages/ai/` (new deps: `openai`):**
+| File | Purpose |
+|------|---------|
+| `openai-client.ts` | Lazy singleton `getOpenAI()` (reads OPENAI_API_KEY at first use). `__setOpenAIForTests` seam. |
+| `whisper-client.ts` | `transcribeAudio(file)` → text (whisper-1). |
+| `gpt-task-parser.ts` | `parseTasks(text)` → `ParsedTask[]` via gpt-4o-mini **strict json_schema** + defensive coercion (cant_miss→high on flexible; scheduledFor nulled for flexible). |
+| `prompts/task-parsing.ts` | The prompt + JSON schema. anchor only if a fixed time/deadline; cant_miss only for fixed time-bound anchors; never "urgent"/red. |
+
+14 AI unit tests (OpenAI mocked).
+
+**Quota domain (`packages/domain/src/quota/`):**
+- `quota-window.ts` — 04:00 UTC quota day (`now−4h` UTC date as a **'YYYY-MM-DD' string**, identical for read + write) + next reset instant.
+- `limits.ts` — free-tier caps (voice_dump 10, ai_breakdown 5, ai_decision 3, praise_play 15); comp/paid → unlimited.
+- `check-quota.ts` — **fails OPEN** on any error (never block a user on our bug). Returns `resetsAtUtc`.
+- `increment-quota.ts` — atomic raw `INSERT … ON DUPLICATE KEY UPDATE` (cuid2 id; needs `@paralleldrive/cuid2`). Best-effort, non-fatal.
+
+19 quota unit tests → **250 domain tests total**.
+
+**Route `apps/web/app/api/voice-dump/route.ts`** (`runtime = 'nodejs'`): auth → checkQuota (gate BEFORE any paid call) → 429 with reset info if exceeded → Whisper → **audio discarded (only in memory, never persisted — Rule 9)** → parseTasks → createTask (+addStep per step) → incrementQuota → return tasks + transcript. 6 integration tests (OpenAI/db mocked, 42 web unit total).
+
+**UI:** `packages/ui/VoiceDumpButton` (hold-to-record MediaRecorder, ping ring + waveform, **`'use client'`**, silent `onMicDenied` fallback). Wired into `TodayClient` between the input and Add; quota-reached card shows local reset time (`toLocaleTimeString` from `resetsAtUtc`) + "Type instead" (focuses the input).
+
+**E2E:** `apps/web/e2e/voice-dump.spec.ts` — 2 scenarios. Drives the **real mic button with a fake audio device** (`--use-fake-device-for-media-stream` + `--use-fake-ui-for-media-stream` + `permissions: ['microphone']` in playwright.config) to hit the quota-reached path — which 429s before any OpenAI call, so **zero cost**. Helper `seedQuotaAtLimit`. **25 E2E total.**
 
 ---
 
@@ -630,20 +1012,41 @@ This summary check catches drift, missed context, and misunderstandings before a
 
 ## 9. Quick Reference Card
 
-**Current state:** Spec phase complete. Tech stack locked. Ready for M1.
+**Current state:** M1–M7 complete. Core loop + Walk Me Through It + Analog Timer + Voice Dump (Whisper + GPT-4o-mini parsing, quotas) all done and verified. Next up: M8 (Reverse Scheduler / Doorknob). ⏸ At the M7 PAUSE POINT.
 
-**Next action:** Validate Bluehost MySQL connection works from outside Bluehost (per the human's explicit requirement) before committing to other M1 setup steps.
+**Milestones completed:** M1 (monorepo + DB), M2 (auth + admin), M3 (design system), M4 (task capture + dashboard), M4.5 (Today core loop — §5.14), M5 (Walk Me Through It — §5.15), M6 (Analog Timer — §5.16), M7 (Voice Dump + AI Parsing — Whisper, GPT-4o-mini strict-JSON task parsing, 04:00-UTC quotas, fail-open; see §5.17).
+
+**Test count:** 248 domain + 14 AI + 42 web unit tests, + 26 Playwright E2E. All passing. (Session 8 rewrote the bubble-up tests for the unified pool and added a ping-pong regression E2E.)
+
+**User preferences:** Stored sparse in `users.preferences` JSON (no migrations). Keys: `visibleSlots` (1–5, default 3), `gentleReframeEnabled` (default true), `gentleReframeThreshold` (3–7, default 4), `soundEnabled` (true), `hapticsEnabled` (true), `tenThreeRuleEnabled` (false), `speedRunChallengesEnabled` (false). Always read via `parsePreferences()` from `@focus-forge/domain/users/update-preferences` — it clamps and fills defaults. Never read raw JSON directly.
+
+**Quotas:** `@focus-forge/domain/quota/*`. `checkQuota(db, userId, key)` (fail-open) before any paid AI call; `incrementQuota` after. Window resets 04:00 UTC. Free caps: voice_dump 10, ai_breakdown 5, ai_decision 3, praise_play 15.
+
+**OpenAI:** `OPENAI_API_KEY` in `apps/web/.env.local` (Next auto-loads) — and set in Vercel for prod ✅ (added Session 8). `@focus-forge/ai` exposes `transcribeAudio` + `parseTasks`.
+
+**Next milestone:** M8 (Reverse Scheduler / Doorknob). M7 is complete — ⏸ confirm before starting M8.
+
+**Critical dev rules:**
+- Use `prisma db push` (NOT `migrate dev`) — Bluehost has no shadow DB support
+- Auth uses database sessions — use `getServerSession(authOptions)` in server actions
+- Domain functions return `Result<T, E>` — never throw
+- All domain functions accept `db: PrismaClient` as first arg (DI)
+- Bubble-up is flex-only — never pulls anchor tasks. Candidate `orderBy` is `[todaySwapCount asc, priorityLevel asc, updatedAt asc]` — swap-count FIRST so a pushed-back task sinks to the bottom (no ping-pong). Don't reorder these keys (§5.14.5).
+- Reordering steps: two-phase update (temp range → final) to dodge the `(taskId, stepOrder)` unique constraint
+- If `next dev` throws `Cannot find module './vendor-chunks/*'` or `_error`: stop node, delete `apps/web/.next`, restart (stale incremental cache, not a code bug)
+- `packages/ui` components that use React hooks MUST start with `'use client'` — tsc won't catch the omission; the Next build will
+- After `db:push`/`db:generate`, stop the dev server first (it locks the Prisma query-engine DLL → EPERM)
 
 **Stack quick reference:**
 - Frontend: Next.js 15 + TypeScript + Tailwind on Vercel
 - Database: Bluehost MySQL (dev) → managed MySQL (prod, TBD)
-- ORM: Prisma with `cuid()` PKs
-- Auth: NextAuth v4 — Google, Facebook, Email magic-link, Email+password
+- ORM: Prisma with `cuid()` PKs — `prisma db push` for schema changes
+- Auth: NextAuth v4 database sessions — Google, Facebook, Email magic-link, Email+password
 - Storage: Cloudflare R2
 - Email: Resend
 - Video: Jitsi public instance
 - AI: OpenAI Whisper + GPT-4o-mini
-- Payments: Stripe (deferred)
+- Payments: Stripe (deferred to M18)
 
 **The single most important rule:** No medical or therapeutic framing. Ever. Anywhere.
 
@@ -655,10 +1058,20 @@ This summary check catches drift, missed context, and misunderstandings before a
 
 This document is the source of truth. When decisions change, update this document FIRST, then update the affected spec docs.
 
-**Last updated:** Session ending with reframing pass + connection-validation requirement + AGENTS.md creation.
+**Last updated:** Session 8 — push-back ping-pong bugfix. Bubble-up rewritten as ONE unified candidate pool ranked `[todaySwapCount asc, priorityLevel asc, updatedAt asc]` so a pushed-back task sinks to the bottom of the queue and a *different* task surfaces (no more 2-item ping-pong). `getTodayView` queue display uses the same order. §5.14.5 rewritten. 248 domain + 14 AI + 42 web unit + 26 E2E. Still at the M7 PAUSE POINT (this was a bugfix on shipped M4.5 behavior, not new milestone work).
 
 **Total spec set:** 9 markdown files (8 tier-2 specs + this AGENTS.md), 5 reference PDFs.
 
-**Total lines of spec:** ~12,000+ lines.
+**Total lines of spec:** ~15,000+ lines (including implementation record).
 
-**Status:** Ready for handoff to Claude Code in VS Code, pending Bluehost MySQL connection validation.
+**Changelog:**
+| Date | Change |
+|------|--------|
+| Session 1 | Initial spec phase + AGENTS.md creation. Reframing pass. Connection-validation requirement. |
+| Session 2 | M1–M4 complete. Prisma db push rule established. Auth database sessions. Result<T,E> pattern locked. |
+| Session 3 | M4.5 core loop. Bubble-up flex-only rule. Anchor strip design. Doorknob window. §5.13 expanded. §5.14 added. Quick reference updated. |
+| Session 4 | M4.5 finished: backlog drawer, reframe DB writes (snooze/lower), single-task mode, two-picker priority capture, settings UI (visibleSlots/reframe), 153 domain tests, 12 Playwright E2E tests. Fixed bubbleUp race (createMany skipDuplicates). Added morning-reset.js + `pnpm reset:test`. Removed migrate-dev scripts. MySQL MCP + E2E harness set up. |
+| Session 5 | M5 complete — Walk Me Through It. Manual step CRUD + reorder (add/complete/reorder/delete/list-step domain fns, 37 tests → 190 total). `/tasks/[taskId]` editor + `/walk/[taskId]` full-screen single-step mode (ESC-pause-resume, auto-complete on last step). first_step + first_complete badges verified. 5 new E2E (17 total). Reorder via accessible up/down buttons (not drag — documented deviation). §5.15 added. |
+| Session 6 | M6 complete — Analog Timer. FocusSession schema. Timer domain (focus-session state machine, wedge math, sound-families, vibration-patterns, speed-run-hook; 41 tests → 231 total). AnalogTimer SVG wedge (yellow→green→mauve, no digital countdown). Web Audio synthesis for Sound Families. `/timer` page (presets/custom, pause/resume/stop, PiP pop-out). Sound/haptics settings. first_focus/focus_complete badges. 10-3 + speed-run scaffolding hooks (events-only). 5 new E2E with clock fast-forward (22 total). §5.16 added. Self-driving PiP fix (keeps counting after navigation; /api/timer/complete). |
+| Session 7 | M7 complete — Voice Dump + AI Parsing. `@focus-forge/ai` (openai SDK; whisper-client, gpt-task-parser strict-JSON, prompt; 14 tests). Quota domain (quota-window 04:00 UTC, limits, check fail-open, atomic increment; 19 tests → 250 domain). `/api/voice-dump` route (quota-gate → Whisper → parse → create tasks → increment; audio never persisted; 6 integration tests). `VoiceDumpButton` (hold-to-record + mic-denied fallback) + quota-reached card in TodayClient. 2 E2E driving a fake mic device to the 429 quota card without hitting OpenAI (25 total). §5.17 added. **Bugfix:** `getTodayView` queue is now the TRUE backlog (all active flexible tasks not in a today slot), so a capture made while slots are full no longer silently vanishes — it shows in "N more in the queue" + drawer. Added a capture confirmation toast + a "never vanishes" E2E. |
+| Session 8 | **Bugfix — push-back ping-pong.** `_bubble-up.ts` rewritten from the old Phase 1 (promote queue) / Phase 2 (pull backlog) split into ONE unified candidate pool = the true backlog, ranked `[todaySwapCount asc, priorityLevel asc, updatedAt asc]`. Swap-count FIRST means a pushed-back task drops to the bottom of the queue, so a *different* task surfaces instead of the same high-priority one boomeranging back. Update-or-create per candidate (swapped-back tasks flip their existing queue row; never-shown tasks get a fresh row), P2002-tolerant. `getTodayView` backlog `orderBy` matched to the same keys so the drawer order = surface order. Rewrote `bubble-up.test.ts` for the unified behavior; updated `get-today-view.test.ts` orderBy assertion; added a ping-pong regression E2E. §5.14.5 rewritten. 248 domain + 26 E2E, all green. Browser-verified: two consecutive push-backs cycled Gold→Silver→Bronze with both Golds sinking to the bottom of the queue. |
