@@ -110,6 +110,12 @@ model User {
   pendingDeleteAdminForUsers User[]                 @relation("PendingDeleteAdmin")
   passwordResetTokens        PasswordResetToken[]
   emailVerificationTokens    EmailVerificationToken[]
+  tasks                      Task[]
+  dailyPlans                 DailyPlan[]
+  userBadges                 UserBadge[]
+  events                     Event[]
+  quotaUsages                QuotaUsage[]
+  focusSessions              FocusSession[]
 
   @@index([accountState])
   @@index([pendingDeleteAt])
@@ -269,6 +275,286 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@map("audit_log")
+}
+
+// ─── Tasks ───────────────────────────────────────────────────────────────────
+// Full model per 04-mysql-schema.md §4.5 (includes M4.5 columns)
+// Soft-Track Protocol: status cannot be 'failed'. priority_level cannot be 'urgent'.
+
+enum TaskPriorityKind {
+  anchor   // time-bound, pinned to scheduled_for
+  flexible // user-decides-when; flows through the bubble-up queue
+}
+
+enum TaskPriorityLevel {
+  cant_miss // non-negotiable — ANCHOR ONLY (enforced by app CHECK logic)
+  high
+  med
+  low
+}
+
+enum TaskStatus {
+  active
+  deferred
+  completed
+  // 'failed' and 'overdue' are physically absent — Soft-Track Protocol
+}
+
+enum TaskCaptureMethod {
+  text
+  voice
+  imported
+  system
+}
+
+model Task {
+  id     String @id @default(cuid())
+  userId String @map("user_id") @db.VarChar(30)
+
+  rawText String @map("raw_text") @db.Text
+  title   String? @db.VarChar(500)
+  notes   String? @db.Text
+
+  // Priority — anchor/flexible model (see §4.5)
+  priorityKind  TaskPriorityKind  @default(flexible) @map("priority_kind")
+  priorityLevel TaskPriorityLevel @default(med) @map("priority_level")
+
+  // Gentle-Reframe / Today-queue bookkeeping (see §4.6.2)
+  todaySwapCount       Int       @default(0) @map("today_swap_count") @db.UnsignedSmallInt
+  reframeOfferedAt     DateTime? @map("reframe_offered_at")
+  reframeSnoozedUntil  DateTime? @map("reframe_snoozed_until")
+
+  status TaskStatus @default(active)
+
+  scheduledFor      DateTime? @map("scheduled_for")
+  estimatedMinutes  Int?      @map("estimated_minutes") @db.UnsignedSmallInt
+
+  completedAt   DateTime? @map("completed_at")
+  deferredCount Int       @default(0) @map("deferred_count") @db.UnsignedSmallInt
+  deferredUntil DateTime? @map("deferred_until")
+
+  captureMethod TaskCaptureMethod @default(text) @map("capture_method")
+  aiMetadata    Json?             @map("ai_metadata")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt     @map("updated_at")
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps         TaskStep[]
+  dailyPlanItems DailyPlanItem[]
+  focusSessions FocusSession[]
+
+  @@index([userId, status, createdAt])
+  @@index([userId, scheduledFor])
+  @@index([deferredUntil])
+  @@index([userId, status, priorityKind, priorityLevel], name: "idx_tasks_today_queue")
+  @@map("tasks")
+}
+
+// ─── Task Steps ───────────────────────────────────────────────────────────────
+// Sub-steps for "Walk Me Through It" mode. See §4.6
+
+enum TaskStepStatus {
+  active
+  completed
+  deferred
+}
+
+model TaskStep {
+  id       String @id @default(cuid())
+  taskId   String @map("task_id") @db.VarChar(30)
+
+  stepOrder Int            @map("step_order") @db.UnsignedSmallInt
+  text      String         @db.Text
+  status    TaskStepStatus @default(active)
+
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt     @map("updated_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, stepOrder])
+  @@index([taskId, status])
+  @@map("task_steps")
+}
+
+// ─── Focus Sessions (M6 Analog Timer) ─────────────────────────────────────────
+// A focus timer run. See §4.12.
+// Soft-Track Protocol: 'incomplete' is neutral, NOT 'failed'.
+
+enum FocusSessionStatus {
+  running
+  completed
+  incomplete
+  paused
+}
+
+model FocusSession {
+  id     String @id @default(cuid())
+  userId String @map("user_id") @db.VarChar(30)
+  taskId String? @map("task_id") @db.VarChar(30) // optional linked task
+
+  plannedDurationSeconds Int  @map("planned_duration_seconds") @db.UnsignedInt
+  actualDurationSeconds  Int? @map("actual_duration_seconds") @db.UnsignedInt
+
+  status FocusSessionStatus @default(running)
+
+  soundFamily          String? @map("sound_family") @db.VarChar(80)
+  alertIntervalSeconds Int?    @map("alert_interval_seconds") @db.UnsignedInt
+
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("focus_sessions")
+}
+
+// ─── Daily Plans + Items (M4.5 Core Loop) ─────────────────────────────────────
+// One plan row per user per local day. See §4.6.1 and §4.6.2
+
+enum DailyPlanRitualState {
+  pending
+  completed
+  skipped
+}
+
+model DailyPlan {
+  id     String @id @default(cuid())
+  userId String @map("user_id") @db.VarChar(30)
+
+  planDate      DateTime             @map("plan_date") @db.Date
+  visibleSlots  Int                  @default(3) @map("visible_slots") @db.UnsignedTinyInt
+  ritualState   DailyPlanRitualState @default(pending) @map("ritual_state")
+  ritualCompletedAt DateTime?        @map("ritual_completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt     @map("updated_at")
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items DailyPlanItem[]
+
+  @@unique([userId, planDate])
+  @@map("daily_plans")
+}
+
+enum DailyPlanItemSlotState {
+  today
+  queue
+  done
+}
+
+enum DailyPlanItemSource {
+  ritual
+  anchor
+  bubble
+  manual
+}
+
+model DailyPlanItem {
+  id          String @id @default(cuid())
+  dailyPlanId String @map("daily_plan_id") @db.VarChar(30)
+  taskId      String @map("task_id") @db.VarChar(30)
+
+  slotState   DailyPlanItemSlotState @default(queue) @map("slot_state")
+  position    Int                    @default(0) @map("position") @db.UnsignedSmallInt
+  source      DailyPlanItemSource    @default(bubble)
+
+  addedAt     DateTime  @default(now()) @map("added_at")
+  completedAt DateTime? @map("completed_at")
+
+  dailyPlan DailyPlan @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([dailyPlanId, taskId])
+  @@index([dailyPlanId, slotState, position])
+  @@map("daily_plan_items")
+}
+
+// ─── Badges ───────────────────────────────────────────────────────────────────
+// Badge definitions (seeded) + earned instances. See §4.8
+
+enum BadgeTier {
+  bronze
+  silver
+  gold
+}
+
+model Badge {
+  id          String    @id @default(cuid())
+  badgeKey    String    @unique @map("badge_key") @db.VarChar(80)
+  displayName String    @map("display_name") @db.VarChar(120)
+  description String    @db.VarChar(500)
+  tier        BadgeTier @default(bronze)
+
+  triggerEventType  String? @map("trigger_event_type") @db.VarChar(80)
+  triggerThreshold  Int?    @map("trigger_threshold") @db.UnsignedInt
+  isRepeatable      Boolean @default(false) @map("is_repeatable")
+
+  iconName String  @map("icon_name") @db.VarChar(80)
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userBadges UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id       String @id @default(cuid())
+  userId   String @map("user_id") @db.VarChar(30)
+  badgeId  String @map("badge_id") @db.VarChar(30)
+
+  earnedAt DateTime @default(now()) @map("earned_at")
+  context  Json?
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id])
+
+  @@index([userId, earnedAt(sort: Desc)])
+  @@index([badgeId])
+  @@map("user_badges")
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+// Append-only log. Drives badge engine + analytics. See §4.15
+
+model Event {
+  id         String  @id @default(cuid())
+  userId     String? @map("user_id") @db.VarChar(30)
+  eventType  String  @map("event_type") @db.VarChar(80)
+  payload    Json?
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eventType, occurredAt(sort: Desc)])
+  @@index([eventType, occurredAt(sort: Desc)])
+  @@map("events")
+}
+
+// ─── Quota Usage ─────────────────────────────────────────────────────────────
+// Daily quota tracking for rate-limited features. See §4.17
+
+model QuotaUsage {
+  id           String @id @default(cuid())
+  userId       String @map("user_id") @db.VarChar(30)
+  quotaKey     String @map("quota_key") @db.VarChar(80)
+  usageDateUtc DateTime @map("usage_date_utc") @db.Date
+  count        Int    @default(0) @db.UnsignedInt
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt     @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, quotaKey, usageDateUtc])
+  @@index([userId, quotaKey])
+  @@map("quota_usage")
 }
 
 // ─── Admin Actions ───────────────────────────────────────────────────────────

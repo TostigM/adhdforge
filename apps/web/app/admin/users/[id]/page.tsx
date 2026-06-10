@@ -10,19 +10,20 @@ import { notFound } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { db } from '@focus-forge/database/client';
 import { getAdminPermissions } from '@focus-forge/domain/admin/permissions';
+import { sendPasswordReset } from './actions';
 
 export default async function AdminUserDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string }>;
+  searchParams: Promise<{ created?: string; resetSent?: string; resetError?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return notFound();
 
   const { id } = await params;
-  const { created } = await searchParams;
+  const { created, resetSent, resetError } = await searchParams;
 
   const [user, permissions, auditActions] = await Promise.all([
     db.user.findUnique({
@@ -77,6 +78,20 @@ export default async function AdminUserDetailPage({
           </p>
         </div>
       )}
+      {resetSent && (
+        <div className="p-3 rounded-lg bg-emerald-900/40 border border-emerald-700/50">
+          <p className="text-emerald-300 text-sm">
+            ✓ Password reset email sent to {user.email}.
+          </p>
+        </div>
+      )}
+      {resetError && (
+        <div className="p-3 rounded-lg bg-amber-900/40 border border-amber-700/50">
+          <p className="text-amber-300 text-sm">
+            ⚠ Failed to send the reset email. Check the server logs and try again.
+          </p>
+        </div>
+      )}
 
       <div>
         <Link href="/admin/users" className="text-indigo-400 hover:text-indigo-300 text-sm">
@@ -124,6 +139,16 @@ export default async function AdminUserDetailPage({
             )}
             {can.manage && (
               <ActionButton href={`/admin/users/${id}/grant-comp`} label="Grant Comp tier" />
+            )}
+            {can.manage && (
+              <form action={sendPasswordReset.bind(null, id)}>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-sm font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200"
+                >
+                  Send password reset
+                </button>
+              </form>
             )}
             {can.delete && (
               <ActionButton href={`/admin/users/${id}/soft-delete`} label="Soft delete" variant="warning" />
