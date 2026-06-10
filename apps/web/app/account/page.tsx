@@ -10,6 +10,9 @@ import { redirect } from 'next/navigation';
 
 import { authOptions } from '@/lib/auth';
 import { db } from '@focus-forge/database/client';
+import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
+import { TodaySettingsClient } from './_components/TodaySettingsClient';
+import { TimerSettingsClient } from './_components/TimerSettingsClient';
 
 export default async function AccountPage() {
   const session = await getServerSession(authOptions);
@@ -25,6 +28,7 @@ export default async function AccountPage() {
       accountState: true,
       emailVerified: true,
       createdAt: true,
+      preferences: true,
     },
   });
 
@@ -82,6 +86,15 @@ export default async function AccountPage() {
             </p>
           )}
         </section>
+
+        {/* Today settings */}
+        <TodaySettingsClient initial={parsePreferences(user.preferences)} />
+
+        {/* Timer settings */}
+        <TimerSettingsClient
+          initialSoundEnabled={parsePreferences(user.preferences).soundEnabled}
+          initialHapticsEnabled={parsePreferences(user.preferences).hapticsEnabled}
+        />
 
         {/* Sign out */}
         <section className="bg-slate-800 rounded-2xl p-6 space-y-4">
