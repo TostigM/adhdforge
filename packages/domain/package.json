@@ -3,19 +3,56 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
   "exports": {
     ".": "./src/index.ts",
+    "./result": "./src/result.ts",
     "./admin/permissions": "./src/admin/permissions.ts",
     "./admin/audit": "./src/admin/audit.ts",
     "./users/account-state": "./src/users/account-state.ts",
-    "./users/display-name": "./src/users/display-name.ts"
+    "./users/display-name": "./src/users/display-name.ts",
+    "./tasks/create-task": "./src/tasks/create-task.ts",
+    "./tasks/complete-task": "./src/tasks/complete-task.ts",
+    "./tasks/defer-task": "./src/tasks/defer-task.ts",
+    "./tasks/list-active-tasks": "./src/tasks/list-active-tasks.ts",
+    "./tasks/add-step": "./src/tasks/add-step.ts",
+    "./tasks/complete-step": "./src/tasks/complete-step.ts",
+    "./tasks/reorder-steps": "./src/tasks/reorder-steps.ts",
+    "./tasks/delete-step": "./src/tasks/delete-step.ts",
+    "./tasks/list-steps": "./src/tasks/list-steps.ts",
+    "./badges/check-and-award": "./src/badges/check-and-award.ts",
+    "./badges/get-user-badges": "./src/badges/get-user-badges.ts",
+    "./daily-plan/get-or-create-today-plan": "./src/daily-plan/get-or-create-today-plan.ts",
+    "./daily-plan/get-today-view": "./src/daily-plan/get-today-view.ts",
+    "./daily-plan/add-to-today-plan": "./src/daily-plan/add-to-today-plan.ts",
+    "./daily-plan/complete-today-item": "./src/daily-plan/complete-today-item.ts",
+    "./daily-plan/swap-today-item": "./src/daily-plan/swap-today-item.ts",
+    "./daily-plan/update-ritual-state": "./src/daily-plan/update-ritual-state.ts",
+    "./daily-plan/reframe-today-item": "./src/daily-plan/reframe-today-item.ts",
+    "./users/update-preferences": "./src/users/update-preferences.ts",
+    "./timer/focus-session": "./src/timer/focus-session.ts",
+    "./timer/sound-families": "./src/timer/sound-families.ts",
+    "./timer/vibration-patterns": "./src/timer/vibration-patterns.ts",
+    "./timer/wedge": "./src/timer/wedge.ts",
+    "./timer/speed-run-hook": "./src/timer/speed-run-hook.ts",
+    "./quota/check-quota": "./src/quota/check-quota.ts",
+    "./quota/increment-quota": "./src/quota/increment-quota.ts",
+    "./quota/limits": "./src/quota/limits.ts",
+    "./quota/quota-window": "./src/quota/quota-window.ts"
   },
   "peerDependencies": {
     "@prisma/client": "^6.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.0"
+    "@vitest/coverage-v8": "^4.1.7",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.7"
+  },
+  "dependencies": {
+    "@paralleldrive/cuid2": "^3.3.0"
   }
 }

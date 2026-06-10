@@ -12,6 +12,7 @@ dist/
 .turbo/
 build/
 out/
+*.tsbuildinfo
 
 # Environment — NEVER commit these
 .env

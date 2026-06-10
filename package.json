@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
+    "postinstall": "prisma generate --schema packages/database/prisma/schema.prisma",
     "build": "turbo run build",
     "dev": "turbo run dev --filter=@focus-forge/web",
     "lint": "turbo run lint",
@@ -10,11 +11,12 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\" --ignore-path .gitignore",
     "db:generate": "prisma generate --schema packages/database/prisma/schema.prisma",
-    "db:migrate:dev": "prisma migrate dev --schema packages/database/prisma/schema.prisma",
-    "db:migrate:deploy": "prisma migrate deploy --schema packages/database/prisma/schema.prisma",
+    "db:push": "prisma db push --schema packages/database/prisma/schema.prisma",
     "db:studio": "prisma studio --schema packages/database/prisma/schema.prisma",
+    "reset:test": "node scripts/morning-reset.js",
+    "reset:test:hard": "node scripts/morning-reset.js --hard",
     "test:db": "tsx --env-file .env.local scripts/test-db-connection.ts",
-    "test:openai": "tsx --env-file .env.local scripts/test-openai.ts",
+    "test:openai": "tsx --env-file apps/web/.env.local scripts/test-openai.ts",
     "test:r2": "tsx --env-file .env.local scripts/test-r2-connection.ts",
     "test:resend": "tsx --env-file .env.local scripts/test-resend.ts"
   },

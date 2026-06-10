@@ -25,7 +25,13 @@
       "dependsOn": ["^typecheck"]
     },
     "test": {
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "**/__tests__/**/*.ts",
+        "**/__tests__/**/*.tsx",
+        "vitest.config.ts"
+      ],
       "outputs": ["coverage/**"]
     }
   }
