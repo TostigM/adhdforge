@@ -6,15 +6,17 @@
  *   1. Auto-inserts today's anchor tasks directly into the visible set.
  *   2. Runs bubble-up to fill remaining slots from the backlog.
  *
- * `planDate` must be a plain date string (YYYY-MM-DD) in the user's local
- * timezone. The caller (server action) derives this from the client-supplied
- * timezone offset. For now, UTC date is an acceptable approximation.
+ * `planDate` is the plan-day LABEL: UTC midnight of the workday-timezone
+ * calendar date. Callers derive it via `getPlanDate()` from `./plan-day`
+ * (currently hardcoded to America/Los_Angeles; per-user timezone lands in
+ * M15.3).
  *
  * See 04-mysql-schema.md §4.6.1, 02-design-system.md §13.5.3
  */
 
 import type { DailyPlan, PrismaClient } from '@prisma/client';
 import { bubbleUp } from './_bubble-up';
+import { getPlanDayWindow } from './plan-day';
 import { parsePreferences } from '../users/update-preferences';
 
 // ─── Core function ────────────────────────────────────────────────────────────
@@ -22,7 +24,7 @@ import { parsePreferences } from '../users/update-preferences';
 export async function getOrCreateTodayPlan(
   db: PrismaClient,
   userId: string,
-  planDate: Date, // midnight UTC of the local day
+  planDate: Date, // plan-day label — see ./plan-day
 ): Promise<DailyPlan> {
   // Try to find existing plan
   const existing = await db.dailyPlan.findUnique({
@@ -72,10 +74,9 @@ async function seedAnchors(
   userId: string,
   planDate: Date,
 ): Promise<void> {
-  // Define the day window (UTC)
-  const dayStart = new Date(planDate);
-  const dayEnd = new Date(planDate);
-  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+  // Real-instant window of this workday (midnight-to-midnight in the
+  // workday timezone, NOT the UTC day of the label)
+  const { dayStart, dayEnd } = getPlanDayWindow(planDate);
 
   const anchors = await db.task.findMany({
     where: {

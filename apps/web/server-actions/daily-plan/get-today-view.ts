@@ -6,14 +6,15 @@
  * Gets or creates today's daily plan and returns the full Today screen state.
  * Called on every dashboard load.
  *
- * planDateUtc: midnight of the user's local day. Until we have timezone
- * support, the client sends the UTC day boundary.
+ * planDateUtc: optional explicit plan-day label. When omitted, the server
+ * derives it from the workday timezone (see domain/daily-plan/plan-day).
  */
 
 import { getServerSession } from 'next-auth';
 
 import { db } from '@focus-forge/database/client';
 import { getOrCreateTodayPlan } from '@focus-forge/domain/daily-plan/get-or-create-today-plan';
+import { getPlanDate } from '@focus-forge/domain/daily-plan/plan-day';
 import { getTodayView } from '@focus-forge/domain/daily-plan/get-today-view';
 import type { TodayViewResult } from '@focus-forge/domain/daily-plan/get-today-view';
 
@@ -31,14 +32,8 @@ export async function getTodayViewAction(
     return { ok: false, error: 'unauthenticated', message: 'Please sign in.' };
   }
 
-  // Derive midnight UTC of today if not supplied
-  const planDate = planDateUtc
-    ? new Date(planDateUtc)
-    : (() => {
-        const d = new Date();
-        d.setUTCHours(0, 0, 0, 0);
-        return d;
-      })();
+  // Derive today's plan-day label if not supplied
+  const planDate = planDateUtc ? new Date(planDateUtc) : getPlanDate();
 
   try {
     const plan = await getOrCreateTodayPlan(db, session.user.id, planDate);

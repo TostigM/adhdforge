@@ -13,6 +13,7 @@ import { redirect } from 'next/navigation';
 
 import { db } from '@focus-forge/database/client';
 import { getOrCreateTodayPlan } from '@focus-forge/domain/daily-plan/get-or-create-today-plan';
+import { getPlanDate } from '@focus-forge/domain/daily-plan/plan-day';
 import { getTodayView } from '@focus-forge/domain/daily-plan/get-today-view';
 import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
 
@@ -25,9 +26,8 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  // Derive today's UTC midnight date
-  const planDate = new Date();
-  planDate.setUTCHours(0, 0, 0, 0);
+  // Today's plan-day label (rolls over at midnight in the workday timezone)
+  const planDate = getPlanDate();
 
   const [user, plan] = await Promise.all([
     db.user.findUnique({

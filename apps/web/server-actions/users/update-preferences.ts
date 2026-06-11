@@ -11,6 +11,7 @@ import { getServerSession } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@focus-forge/database/client';
+import { getPlanDate } from '@focus-forge/domain/daily-plan/plan-day';
 import { updateUserPreferences } from '@focus-forge/domain/users/update-preferences';
 import type { UserPreferences } from '@focus-forge/domain/users/update-preferences';
 
@@ -36,8 +37,7 @@ export async function updatePreferencesAction(
 
   // If visibleSlots changed, apply it to today's plan immediately
   if (update.visibleSlots !== undefined) {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = getPlanDate();
     await db.dailyPlan.updateMany({
       where: { userId: session.user.id, planDate: today },
       data: { visibleSlots: update.visibleSlots },

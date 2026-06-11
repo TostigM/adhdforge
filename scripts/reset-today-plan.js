@@ -22,9 +22,11 @@ async function main() {
   });
   if (!user) throw new Error(`User not found: ${USER_EMAIL}`);
 
-  // Today's plan date = UTC midnight of today
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  // Today's plan date = UTC midnight of today's Pacific calendar date
+  // (must match getPlanDate() in domain/daily-plan/plan-day.ts)
+  const todayLA = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  const [year, month, day] = todayLA.split('-').map(Number);
+  const today = new Date(Date.UTC(year, month - 1, day));
   console.log(`Resetting plan for ${today.toISOString().slice(0, 10)} (user ${user.id})`);
 
   const plan = await db.dailyPlan.findUnique({

@@ -26,6 +26,7 @@
     "./tasks/list-steps": "./src/tasks/list-steps.ts",
     "./badges/check-and-award": "./src/badges/check-and-award.ts",
     "./badges/get-user-badges": "./src/badges/get-user-badges.ts",
+    "./daily-plan/plan-day": "./src/daily-plan/plan-day.ts",
     "./daily-plan/get-or-create-today-plan": "./src/daily-plan/get-or-create-today-plan.ts",
     "./daily-plan/get-today-view": "./src/daily-plan/get-today-view.ts",
     "./daily-plan/add-to-today-plan": "./src/daily-plan/add-to-today-plan.ts",
