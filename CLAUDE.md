@@ -5,6 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 @files/AGENTS.md
 @files/07-claude-code-instructions.md
 
+## Workspace-Wide Standards
+
+The workspace root (`C:\Users\tosti\projects\`) holds two standards documents that apply to ALL projects in this workspace. Read them as part of session start:
+
+@../PROGRAMMING-PRACTICES.md
+@../STYLE-GUIDE.md
+
+**Precedence:** this repo's own docs (AGENTS.md, 07-claude-code-instructions.md, the spec set in `files/`) override the workspace documents wherever they conflict — e.g. Focus Forge's Inviolable Rules, `Result<T,E>` pattern, and language rules always win.
+
 ---
 
 ## Custom Slash Commands
@@ -287,7 +296,7 @@ The core of the product. Understand this before touching any daily-plan code.
 - **Bubble-up ranking = `[todaySwapCount asc, priorityLevel asc, updatedAt asc]`.** ONE unified candidate pool (the true backlog), NOT a queue-first/backlog-second split. Swap-count is the PRIMARY key on purpose: pushing a task back increments its `todaySwapCount`, so it sinks to the bottom of the queue and a *different* task surfaces — this is what prevents the 2-item ping-pong. Don't reorder these keys; priority-first reintroduces the boomerang bug. `getTodayView`'s backlog query uses the same `orderBy` so the drawer order matches what surfaces next.
 - Slot counting (`visibleSlots`) ignores anchor items in `slotState: 'today'`
 - Active anchors (within 30 min of `scheduledFor`) promote to a full card at top, borrowing one flex slot — total cards stays at `visibleSlots`
-- `planDate` is always UTC midnight: `const d = new Date(); d.setUTCHours(0,0,0,0)`
+- `planDate` rolls over at **midnight Pacific** (`America/Los_Angeles`), stored as UTC midnight of the Pacific calendar date. ALWAYS use `getPlanDate()` / `getPlanDayWindow()` from `@focus-forge/domain/daily-plan/plan-day` — never `setUTCHours(0,0,0,0)`. Per-user timezone preference planned for M15.3.
 - **Queue display = the true backlog.** `getTodayView`'s `queueCount`/`queueItems` are computed from the `tasks` table — *every* active flexible task not currently a visible "today" card — NOT just swap-created `slotState: 'queue'` plan items. This is why a captured/voice-dumped task never vanishes when all slots are full: it always shows in "N more in the queue" + the drawer, and bubble-up surfaces it when a slot frees.
 
 **Entry point:** `apps/web/app/dashboard/page.tsx` → `getOrCreateTodayPlan` → `getTodayView` → `TodayClient`

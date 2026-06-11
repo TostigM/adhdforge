@@ -2373,6 +2373,12 @@ All features functional. Pre-launch hardening begins.
 - Notification preferences
 - Linked auth methods
 - Settings → About link (jumps to /about)
+- Workday timezone preference: replaces the hardcoded WORKDAY_TIMEZONE
+  constant in packages/domain/src/daily-plan/plan-day.ts (Session 10;
+  currently America/Los_Angeles). getPlanDate/getPlanDayWindow gain a tz
+  parameter read from user.preferences; default from browser
+  Intl.DateTimeFormat().resolvedOptions().timeZone at signup.
+  M17 routine generation already assumes this exists.
 ```
 
 #### 15.4 Static Pages — About, References, Legal

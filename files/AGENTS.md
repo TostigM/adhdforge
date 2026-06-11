@@ -515,17 +515,18 @@ All domain functions accept `db: PrismaClient` as first argument (dependency inj
 
 ---
 
-#### 5.14.4 Daily Plan Date — UTC Midnight
+#### 5.14.4 Daily Plan Date — Pacific Midnight (UPDATED Session 10)
 
-`planDate` is always **UTC midnight of the user's current local day**, computed server-side:
+**[DECISION — Session 10]** The plan day rolls over at **midnight America/Los_Angeles**, not midnight UTC. The original UTC approximation flipped the dashboard to a new day at 4–5 PM Pacific — mid-evening for the product owner (Oceanside, CA). A per-user timezone preference is planned for **M15.3 (Account Settings)**; until then the timezone is the `WORKDAY_TIMEZONE` constant.
 
-```typescript
-const d = new Date();
-d.setUTCHours(0, 0, 0, 0);
-// d is now UTC midnight of today
-```
+All "what day is it" logic lives in ONE module: `packages/domain/src/daily-plan/plan-day.ts` (exported as `@focus-forge/domain/daily-plan/plan-day`). **Never compute plan dates with `setUTCHours` again.** Two distinct concepts:
 
-This is an approximation: users far from UTC may see a slightly wrong day at midnight. A proper implementation would pass the user's timezone from the client. Logged as a known limitation; acceptable for v1.
+- **`getPlanDate(now?)`** → the LABEL stored in `daily_plans.plan_date` (@db.Date): **UTC midnight of the Pacific calendar date**. (At 10 PM PDT June 9 — which is 05:00 UTC June 10 — the label is still June 9.) This matches the convention `morning-reset.js` / `create-tomorrow-anchors.js` already used.
+- **`getPlanDayWindow(planDate)`** → `{ dayStart, dayEnd }`: the REAL instants when that Pacific day begins/ends (07:00 UTC in PDT, 08:00 UTC in PST; DST days are 23/25 hours). Used by `seedAnchors` to filter `scheduledFor` — an evening anchor (9 PM PDT = next-day UTC) now correctly lands in its own day's plan.
+
+Call sites: `dashboard/page.tsx`, `server-actions/daily-plan/get-today-view.ts`, `server-actions/users/update-preferences.ts` (all via `getPlanDate`), `seedAnchors` in `get-or-create-today-plan.ts` (via `getPlanDayWindow`), `scripts/reset-today-plan.js` (inline JS equivalent). Quota windows are UNCHANGED — they reset at 04:00 UTC by spec (§5.5), independent of the plan day.
+
+11 unit tests in `plan-day.test.ts` cover evening rollover, exact-midnight boundaries (PDT + PST), DST spring/fall window lengths, and label↔window consistency.
 
 ---
 
@@ -1016,7 +1017,7 @@ This summary check catches drift, missed context, and misunderstandings before a
 
 **Milestones completed:** M1 (monorepo + DB), M2 (auth + admin), M3 (design system), M4 (task capture + dashboard), M4.5 (Today core loop — §5.14), M5 (Walk Me Through It — §5.15), M6 (Analog Timer — §5.16), M7 (Voice Dump + AI Parsing — Whisper, GPT-4o-mini strict-JSON task parsing, 04:00-UTC quotas, fail-open; see §5.17).
 
-**Test count:** 248 domain + 14 AI + 42 web unit tests, + 26 Playwright E2E. All passing. (Session 8 rewrote the bubble-up tests for the unified pool and added a ping-pong regression E2E.)
+**Test count:** 259 domain + 14 AI + 42 web unit tests, + 27 Playwright E2E. All passing — full suite re-verified green in Session 10, including the new plan-day timezone suite. (Earlier records said 26 E2E; the actual suite is 27 — the running tally had drifted by one across Sessions 6–8. 27 is the verified count: today-core 8, today-features 6, timer 6, walk-through 5, voice-dump 2.)
 
 **User preferences:** Stored sparse in `users.preferences` JSON (no migrations). Keys: `visibleSlots` (1–5, default 3), `gentleReframeEnabled` (default true), `gentleReframeThreshold` (3–7, default 4), `soundEnabled` (true), `hapticsEnabled` (true), `tenThreeRuleEnabled` (false), `speedRunChallengesEnabled` (false). Always read via `parsePreferences()` from `@focus-forge/domain/users/update-preferences` — it clamps and fills defaults. Never read raw JSON directly.
 
@@ -1028,6 +1029,7 @@ This summary check catches drift, missed context, and misunderstandings before a
 
 **Critical dev rules:**
 - Use `prisma db push` (NOT `migrate dev`) — Bluehost has no shadow DB support
+- Plan day rolls over at midnight Pacific — ALWAYS use `getPlanDate()`/`getPlanDayWindow()` from `daily-plan/plan-day`, never `setUTCHours(0,0,0,0)` (§5.14.4)
 - Auth uses database sessions — use `getServerSession(authOptions)` in server actions
 - Domain functions return `Result<T, E>` — never throw
 - All domain functions accept `db: PrismaClient` as first arg (DI)
@@ -1058,7 +1060,7 @@ This summary check catches drift, missed context, and misunderstandings before a
 
 This document is the source of truth. When decisions change, update this document FIRST, then update the affected spec docs.
 
-**Last updated:** Session 9 — first real Vercel deploy + git landing. Discovered ALL of M4.5–M7 was uncommitted (origin was still at the early auth commit `ae3364d`); landed it as 7 logical commits (build fix → foundation → M4.5 → M5 → M6 → M7 → tests+docs) and pushed to `main`. Fixed the failed Vercel deploy by adding a root `postinstall: prisma generate` (clean Vercel installs were never generating the Prisma client). Production deploy now green; Google OAuth login verified locally (the earlier "Unexpected end of JSON input" was a transient dev-server-restart/stale-tab artifact, not a bug). Still at the M7 PAUSE POINT — M8 (Reverse Scheduler / Doorknob) is planned but not started.
+**Last updated:** Session 10 (2026-06-10) — full-suite baseline run before starting M8. All suites green at `797d508`: 248 domain + 14 AI + 42 web unit + 27 Playwright E2E (E2E count corrected from the stale "26"). apps/web typechecks clean. Found that packages/domain and packages/ai lack a tsconfig.json so their standalone `typecheck` script has never worked (flagged for separate fix, not blocking). M8 (Reverse Scheduler / Doorknob) plan drafted: Doorknob sessions persisted as `scheduled_alerts` rows (no new table), client-side browser notifications with hourly-cron backstop.
 
 **Total spec set:** 9 markdown files (8 tier-2 specs + this AGENTS.md), 5 reference PDFs.
 
@@ -1076,3 +1078,4 @@ This document is the source of truth. When decisions change, update this documen
 | Session 7 | M7 complete — Voice Dump + AI Parsing. `@focus-forge/ai` (openai SDK; whisper-client, gpt-task-parser strict-JSON, prompt; 14 tests). Quota domain (quota-window 04:00 UTC, limits, check fail-open, atomic increment; 19 tests → 250 domain). `/api/voice-dump` route (quota-gate → Whisper → parse → create tasks → increment; audio never persisted; 6 integration tests). `VoiceDumpButton` (hold-to-record + mic-denied fallback) + quota-reached card in TodayClient. 2 E2E driving a fake mic device to the 429 quota card without hitting OpenAI (25 total). §5.17 added. **Bugfix:** `getTodayView` queue is now the TRUE backlog (all active flexible tasks not in a today slot), so a capture made while slots are full no longer silently vanishes — it shows in "N more in the queue" + drawer. Added a capture confirmation toast + a "never vanishes" E2E. |
 | Session 8 | **Bugfix — push-back ping-pong.** `_bubble-up.ts` rewritten from the old Phase 1 (promote queue) / Phase 2 (pull backlog) split into ONE unified candidate pool = the true backlog, ranked `[todaySwapCount asc, priorityLevel asc, updatedAt asc]`. Swap-count FIRST means a pushed-back task drops to the bottom of the queue, so a *different* task surfaces instead of the same high-priority one boomeranging back. Update-or-create per candidate (swapped-back tasks flip their existing queue row; never-shown tasks get a fresh row), P2002-tolerant. `getTodayView` backlog `orderBy` matched to the same keys so the drawer order = surface order. Rewrote `bubble-up.test.ts` for the unified behavior; updated `get-today-view.test.ts` orderBy assertion; added a ping-pong regression E2E. §5.14.5 rewritten. 248 domain + 26 E2E, all green. Browser-verified: two consecutive push-backs cycled Gold→Silver→Bronze with both Golds sinking to the bottom of the queue. |
 | Session 9 | **First real Vercel deploy + git landing.** Found ALL of M4.5–M7 uncommitted (origin stuck at `ae3364d`); committed as 7 logical commits (chore build fix → foundation → M4.5 → M5 → M6 → M7 → tests+docs) and pushed `main`. **Deploy fix:** added root `postinstall: prisma generate` — cache-skipped Vercel installs never generated the Prisma client, so `next build` died with "@prisma/client did not initialize". Also gitignored `*.tsbuildinfo`. Verified a local `next build` (all 21 routes compile) before pushing; Vercel deploy went green (the turbo "cannot find binary path" was a local-only pnpm-shim-not-on-PATH quirk, irrelevant on Vercel). `OPENAI_API_KEY` added to Vercel env. Google OAuth login verified locally (earlier "Unexpected end of JSON input" was a transient dev-restart/stale-tab artifact — endpoints return valid JSON; signin POST hands back the correct Google OAuth URL). No code/test changes — repo at `590ad2e`. |
+| Session 10 | **Full-suite baseline before M8 — all green, no code changes.** Ran every suite at `797d508`: 248 domain (26 files), 14 AI (2 files), 42 web unit (7 files), 27 Playwright E2E — all passing. `tsc --noEmit` clean on apps/web. Corrected the Quick Reference E2E count (26 → 27; the tally had drifted by one across Sessions 6–8). **Finding:** `packages/domain` and `packages/ai` have a `typecheck` script but NO tsconfig.json — their standalone typecheck has never worked (src is only checked transitively via apps/web's tsc; their test files aren't checked at all). Flagged for a separate fix, not blocking M8. Reproduced the local-only turbo "cannot find binary path" quirk (`pnpm dev` at root fails; `cd apps/web && pnpm dev` works). M8 plan drafted and approved-pending: no new table (Doorknob sessions persisted as `scheduled_alerts` rows), client-side browser notifications + hourly cron backstop, zones Yellow wrap-up → Green gather → Mauve door → transit. **Timezone fix — plan day now rolls over at midnight Pacific** (the UTC approximation flipped the dashboard to a new day at 4–5 PM for the Oceanside-based product owner): new `daily-plan/plan-day.ts` (`WORKDAY_TIMEZONE='America/Los_Angeles'`, `getPlanDate` label + `getPlanDayWindow` real instants, DST-safe via two-pass Intl offset); swapped into dashboard page, get-today-view + update-preferences actions, `seedAnchors` window, and `reset-today-plan.js`; 11 new unit tests (259 domain total); verified live during the 5 PM–midnight divergence window (01:53 UTC June 11 → planDate June 10 ✓) + full E2E green. Per-user timezone preference added to roadmap M15.3 (§5.14.4 rewritten). Workspace standards docs created at projects root (PROGRAMMING-PRACTICES.md, STYLE-GUIDE.md, TOSTIG.md) and wired into CLAUDE.md. |
