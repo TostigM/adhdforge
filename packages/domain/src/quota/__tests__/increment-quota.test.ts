@@ -21,7 +21,7 @@ describe('incrementQuota', () => {
     await incrementQuota(db, USER, 'voice_dump');
     expect(db.$executeRaw).toHaveBeenCalledTimes(1);
     // The tagged-template strings are the first arg; assert the SQL shape.
-    const strings = db.$executeRaw.mock.calls[0][0] as string[];
+    const strings = db.$executeRaw.mock.calls[0]?.[0] as string[];
     const sql = strings.join('?');
     expect(sql).toMatch(/INSERT INTO quota_usage/i);
     expect(sql).toMatch(/ON DUPLICATE KEY UPDATE count = count \+ 1/i);

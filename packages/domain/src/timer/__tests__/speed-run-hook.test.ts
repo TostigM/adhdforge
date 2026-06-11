@@ -43,7 +43,7 @@ describe('checkSpeedRunEligibility', () => {
   it('counts only task.completed within the window', async () => {
     db.event.count.mockResolvedValue(3);
     await checkSpeedRunEligibility(db, USER, { enabled: true, windowMinutes: 15 });
-    const callArg = db.event.count.mock.calls[0][0] as { where: { eventType: string; occurredAt: { gte: Date } } };
+    const callArg = db.event.count.mock.calls[0]?.[0] as { where: { eventType: string; occurredAt: { gte: Date } } };
     expect(callArg.where.eventType).toBe('task.completed');
     expect(callArg.where.occurredAt.gte).toBeInstanceOf(Date);
   });

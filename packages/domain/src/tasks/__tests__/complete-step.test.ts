@@ -77,7 +77,7 @@ describe('completeStep', () => {
 
   it('marks the step completed with a timestamp', async () => {
     await completeStep(db, INPUT);
-    const call = db.taskStep.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.taskStep.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.status).toBe('completed');
     expect(call.data.completedAt).toBeInstanceOf(Date);
   });
@@ -140,7 +140,7 @@ describe('completeStep', () => {
 
   it('never sets a "failed" status', async () => {
     await completeStep(db, INPUT);
-    const call = db.taskStep.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.taskStep.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.status).not.toBe('failed');
   });
 

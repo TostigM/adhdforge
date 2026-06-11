@@ -37,7 +37,7 @@ function modelMock() {
 // $transaction receives a callback and calls it with the same mock db.
 // This lets tests assert that operations inside $transaction were called.
 
-function makeTxMock(db: ReturnType<typeof makeMockPrisma>) {
+function makeTxMock(db: MockPrisma) {
   return vi.fn().mockImplementation((cb: (tx: typeof db) => Promise<unknown>) => cb(db));
 }
 

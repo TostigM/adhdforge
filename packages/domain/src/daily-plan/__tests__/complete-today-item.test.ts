@@ -69,7 +69,7 @@ describe('completeTodayItem', () => {
 
   it('sets completedAt on the planItem', async () => {
     await completeTodayItem(db, INPUT);
-    const call = db.dailyPlanItem.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.dailyPlanItem.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.completedAt).toBeInstanceOf(Date);
   });
 
@@ -115,7 +115,7 @@ describe('completeTodayItem', () => {
 
   it('never sets task status to "failed"', async () => {
     await completeTodayItem(db, INPUT);
-    const call = db.task.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.task.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.status).not.toBe('failed');
   });
 

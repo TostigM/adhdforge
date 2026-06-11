@@ -109,7 +109,7 @@ describe('updateUserPreferences', () => {
 
     await updateUserPreferences(db, 'user_test_01', { visibleSlots: 2 });
 
-    const call = db.user.update.mock.calls[0][0] as { data: { preferences: Record<string, unknown> } };
+    const call = db.user.update.mock.calls[0]?.[0] as { data: { preferences: Record<string, unknown> } };
     expect(call.data.preferences).toMatchObject({
       visibleSlots: 2,           // updated
       gentleReframeEnabled: false, // preserved
@@ -125,7 +125,7 @@ describe('updateUserPreferences', () => {
 
   it('toggling gentleReframeEnabled to false persists', async () => {
     await updateUserPreferences(db, 'user_test_01', { gentleReframeEnabled: false });
-    const call = db.user.update.mock.calls[0][0] as { data: { preferences: Record<string, unknown> } };
+    const call = db.user.update.mock.calls[0]?.[0] as { data: { preferences: Record<string, unknown> } };
     expect(call.data.preferences.gentleReframeEnabled).toBe(false);
   });
 

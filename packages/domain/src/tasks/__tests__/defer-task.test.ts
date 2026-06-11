@@ -120,7 +120,7 @@ describe('deferTask', () => {
     // The count must use prisma's { increment: 1 } — never be read and re-written
     // (which would cause a race condition). This verifies the correct update pattern.
     await deferTask(db, INPUT);
-    const call = db.task.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.task.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.deferredCount).toEqual({ increment: 1 });
   });
 

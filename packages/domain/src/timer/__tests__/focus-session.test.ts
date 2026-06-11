@@ -150,7 +150,7 @@ describe('endFocusSession', () => {
   it('completed: sets status/actual/endedAt and logs focus_session.completed', async () => {
     const r = await endFocusSession(db, { sessionId: 'fs_test_01', userId: USER, actualDurationSeconds: 1500, status: 'completed' });
     expect(r.ok).toBe(true);
-    const call = db.focusSession.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.focusSession.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.status).toBe('completed');
     expect(call.data.actualDurationSeconds).toBe(1500);
     expect(call.data.endedAt).toBeInstanceOf(Date);
@@ -167,7 +167,7 @@ describe('endFocusSession', () => {
 
   it('incomplete is neutral — no completed event, never "failed"', async () => {
     await endFocusSession(db, { sessionId: 'fs_test_01', userId: USER, actualDurationSeconds: 300, status: 'incomplete' });
-    const call = db.focusSession.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.focusSession.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.status).toBe('incomplete');
     expect(call.data.status).not.toBe('failed');
     expect(db.event.create).not.toHaveBeenCalled();
@@ -182,7 +182,7 @@ describe('endFocusSession', () => {
 
   it('clamps negative actualDuration to 0', async () => {
     await endFocusSession(db, { sessionId: 'fs_test_01', userId: USER, actualDurationSeconds: -50, status: 'incomplete' });
-    const call = db.focusSession.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.focusSession.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.actualDurationSeconds).toBe(0);
   });
 

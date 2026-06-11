@@ -94,7 +94,7 @@ describe('parseTasks', () => {
   it('requests gpt-4o-mini with strict json_schema', async () => {
     mockResponse([]);
     await parseTasks('hi');
-    const arg = create.mock.calls[0][0];
+    const arg = create.mock.calls[0]?.[0];
     expect(arg.model).toBe('gpt-4o-mini');
     expect(arg.response_format.type).toBe('json_schema');
     expect(arg.response_format.json_schema.strict).toBe(true);

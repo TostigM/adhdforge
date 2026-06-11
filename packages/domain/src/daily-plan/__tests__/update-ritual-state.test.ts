@@ -53,7 +53,7 @@ describe('updateRitualState', () => {
 
   it('sets ritualCompletedAt to a Date when action is "complete"', async () => {
     await updateRitualState(db, { planId: 'plan_test_01', userId: 'user_test_01', action: 'complete' });
-    const call = db.dailyPlan.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.dailyPlan.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.ritualCompletedAt).toBeInstanceOf(Date);
   });
 
@@ -73,7 +73,7 @@ describe('updateRitualState', () => {
 
   it('does NOT set ritualCompletedAt when action is "skip"', async () => {
     await updateRitualState(db, { planId: 'plan_test_01', userId: 'user_test_01', action: 'skip' });
-    const call = db.dailyPlan.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.dailyPlan.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.ritualCompletedAt).toBeUndefined();
   });
 

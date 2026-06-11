@@ -156,13 +156,13 @@ describe('createTask', () => {
   describe('Soft-Track Protocol', () => {
     it('never sets status to "failed"', async () => {
       await createTask(db, BASE_INPUT);
-      const call = db.task.create.mock.calls[0][0] as { data: Record<string, unknown> };
+      const call = db.task.create.mock.calls[0]?.[0] as { data: Record<string, unknown> };
       expect(call.data.status).not.toBe('failed');
     });
 
     it('never sets status to "overdue"', async () => {
       await createTask(db, BASE_INPUT);
-      const call = db.task.create.mock.calls[0][0] as { data: Record<string, unknown> };
+      const call = db.task.create.mock.calls[0]?.[0] as { data: Record<string, unknown> };
       expect(call.data.status).not.toBe('overdue');
     });
   });

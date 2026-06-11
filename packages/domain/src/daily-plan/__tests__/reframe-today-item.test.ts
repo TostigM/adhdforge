@@ -52,7 +52,7 @@ describe('reframeTodayItem', () => {
     await reframeTodayItem(db, { ...INPUT_BASE, action: 'snooze' });
     const after = Date.now();
 
-    const call = db.task.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.task.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     const snoozedUntil = call.data.reframeSnoozedUntil as Date;
 
     expect(snoozedUntil).toBeInstanceOf(Date);
@@ -63,7 +63,7 @@ describe('reframeTodayItem', () => {
 
   it('snooze does not change priorityLevel', async () => {
     await reframeTodayItem(db, { ...INPUT_BASE, action: 'snooze' });
-    const call = db.task.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.task.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.priorityLevel).toBeUndefined();
   });
 
@@ -83,7 +83,7 @@ describe('reframeTodayItem', () => {
 
   it('lower does not set reframeSnoozedUntil', async () => {
     await reframeTodayItem(db, { ...INPUT_BASE, action: 'lower' });
-    const call = db.task.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.task.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.reframeSnoozedUntil).toBeUndefined();
   });
 
@@ -96,7 +96,7 @@ describe('reframeTodayItem', () => {
 
   it('never sets status to "failed"', async () => {
     await reframeTodayItem(db, { ...INPUT_BASE, action: 'lower' });
-    const call = db.task.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const call = db.task.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(call.data.status).not.toBe('failed');
   });
 

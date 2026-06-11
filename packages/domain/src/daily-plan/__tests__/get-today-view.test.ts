@@ -94,7 +94,7 @@ describe('getTodayView', () => {
     const view = await getTodayView(db, PLAN_ID, USER_ID);
 
     expect(view.todayItems).toHaveLength(1);
-    expect(view.todayItems[0].itemId).toBe('item_01');
+    expect(view.todayItems[0]?.itemId).toBe('item_01');
   });
 
   // ── Doorknob window ───────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ describe('getTodayView', () => {
 
     const view = await getTodayView(db, PLAN_ID, USER_ID);
 
-    expect(view.scheduledAnchors[0].isActive).toBe(true);
+    expect(view.scheduledAnchors[0]?.isActive).toBe(true);
   });
 
   it('isActive = false when scheduledFor is far in the future', async () => {
@@ -122,7 +122,7 @@ describe('getTodayView', () => {
 
     const view = await getTodayView(db, PLAN_ID, USER_ID);
 
-    expect(view.scheduledAnchors[0].isActive).toBe(false);
+    expect(view.scheduledAnchors[0]?.isActive).toBe(false);
   });
 
   it('isActive = false when anchor is done (even if within window)', async () => {
@@ -136,7 +136,7 @@ describe('getTodayView', () => {
 
     const view = await getTodayView(db, PLAN_ID, USER_ID);
 
-    expect(view.scheduledAnchors[0].isActive).toBe(false);
+    expect(view.scheduledAnchors[0]?.isActive).toBe(false);
   });
 
   // ── Counts ────────────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ describe('getTodayView', () => {
 
     expect(view.queueCount).toBe(2);
     // The backlog query excludes the current today-card tasks and anchors.
-    const where = db.task.count.mock.calls[0][0]!.where as Record<string, unknown>;
+    const where = db.task.count.mock.calls[0]?.[0].where as Record<string, unknown>;
     expect(where.priorityKind).toBe('flexible');
     expect(where.status).toBe('active');
   });
@@ -188,7 +188,7 @@ describe('getTodayView', () => {
 
     const view = await getTodayView(db, PLAN_ID, USER_ID);
 
-    expect(view.todayItems[0].showReframeCard).toBe(true);
+    expect(view.todayItems[0]?.showReframeCard).toBe(true);
   });
 
   it('showReframeCard = false when reframeOfferedAt is set', async () => {
@@ -198,7 +198,7 @@ describe('getTodayView', () => {
 
     const view = await getTodayView(db, PLAN_ID, USER_ID);
 
-    expect(view.todayItems[0].showReframeCard).toBe(false);
+    expect(view.todayItems[0]?.showReframeCard).toBe(false);
   });
 
   it('showReframeCard = false for "low" priority', async () => {
@@ -208,7 +208,7 @@ describe('getTodayView', () => {
 
     const view = await getTodayView(db, PLAN_ID, USER_ID);
 
-    expect(view.todayItems[0].showReframeCard).toBe(false);
+    expect(view.todayItems[0]?.showReframeCard).toBe(false);
   });
 
   // ── Ritual suggestions ────────────────────────────────────────────────────────
@@ -224,7 +224,7 @@ describe('getTodayView', () => {
     const view = await getTodayView(db, PLAN_ID, USER_ID);
 
     expect(view.ritualSuggestions).toHaveLength(1);
-    expect(view.ritualSuggestions[0].taskId).toBe('sug_01');
+    expect(view.ritualSuggestions[0]?.taskId).toBe('sug_01');
   });
 
   it('returns empty ritualSuggestions when ritual is completed', async () => {
