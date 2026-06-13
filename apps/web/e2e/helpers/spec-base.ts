@@ -25,6 +25,7 @@ import {
   resetPreferences,
   getLatestPlanId,
   addQueueItems,
+  getDoorknobAlerts,
 } from './test-user';
 
 // Worker process needs DATABASE_URL for direct DB seeding/reset
@@ -64,4 +65,5 @@ export {
   resetPreferences,
   getLatestPlanId,
   addQueueItems,
+  getDoorknobAlerts,
 };

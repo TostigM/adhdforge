@@ -114,6 +114,7 @@ export async function cleanupTestUser(): Promise<void> {
   await db.session.deleteMany({ where: { userId } });
   await db.userBadge.deleteMany({ where: { userId } }).catch(() => {});
   await db.auditLog.deleteMany({ where: { userId } }).catch(() => {});
+  await db.scheduledAlert.deleteMany({ where: { userId } }).catch(() => {});
 
   await db.user.delete({ where: { id: userId } });
 }
@@ -221,6 +222,17 @@ export async function resetTestUserData(userId: string): Promise<void> {
   await db.event.deleteMany({ where: { userId } });
   await db.focusSession.deleteMany({ where: { userId } });
   await db.userBadge.deleteMany({ where: { userId } }).catch(() => {});
+  await db.scheduledAlert.deleteMany({ where: { userId } }).catch(() => {});
+}
+
+/** All doorknob_zone alerts for the user (any status), oldest scheduled first. */
+export async function getDoorknobAlerts(userId: string) {
+  const db = getPrisma();
+  return db.scheduledAlert.findMany({
+    where: { userId, alertType: 'doorknob_zone' },
+    orderBy: { scheduledFor: 'asc' },
+    select: { status: true, scheduledFor: true, payload: true },
+  });
 }
 
 /**

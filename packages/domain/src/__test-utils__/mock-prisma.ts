@@ -25,8 +25,10 @@ function modelMock() {
     create: vi.fn(),
     createMany: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     upsert: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
     count: vi.fn(),
     aggregate: vi.fn(),
   };
@@ -54,6 +56,7 @@ export type MockPrisma = {
   dailyPlanItem: ReturnType<typeof modelMock>;
   focusSession: ReturnType<typeof modelMock>;
   quotaUsage: ReturnType<typeof modelMock>;
+  scheduledAlert: ReturnType<typeof modelMock>;
   $transaction: ReturnType<typeof vi.fn>;
   $queryRaw: ReturnType<typeof vi.fn>;
   $executeRaw: ReturnType<typeof vi.fn>;
@@ -71,6 +74,7 @@ export function makeMockPrisma(): MockPrisma & PrismaClient {
     dailyPlanItem: modelMock(),
     focusSession: modelMock(),
     quotaUsage: modelMock(),
+    scheduledAlert: modelMock(),
   } as unknown as MockPrisma;
 
   (mock as unknown as { $transaction: unknown }).$transaction = makeTxMock(mock);

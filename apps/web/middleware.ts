@@ -50,7 +50,7 @@ export function middleware(request: NextRequest) {
   }
 
   // ── Protected app routes ───────────────────────────────────────────────────
-  const protectedPaths = ['/dashboard', '/account', '/tasks', '/walk', '/timer', '/launchpad'];
+  const protectedPaths = ['/dashboard', '/account', '/tasks', '/walk', '/timer', '/doorknob', '/launchpad'];
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
 
   if (isProtected && !hasSessionCookie(request)) {

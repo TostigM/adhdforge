@@ -116,6 +116,7 @@ model User {
   events                     Event[]
   quotaUsages                QuotaUsage[]
   focusSessions              FocusSession[]
+  scheduledAlerts            ScheduledAlert[]
 
   @@index([accountState])
   @@index([pendingDeleteAt])
@@ -518,6 +519,45 @@ model UserBadge {
   @@index([userId, earnedAt(sort: Desc)])
   @@index([badgeId])
   @@map("user_badges")
+}
+
+// ─── Scheduled Alerts ─────────────────────────────────────────────────────────
+// Future reminders (Doorknob zone transitions, nightly Launchpad, etc.). See §4.14.
+// A Doorknob session has no table of its own: it IS its set of pending
+// doorknob_zone alerts, linked by payload.sessionId (M8 decision).
+
+enum ScheduledAlertType {
+  doorknob_zone
+  launchpad_nightly
+  task_reminder
+  check_in
+}
+
+enum ScheduledAlertStatus {
+  pending
+  fired
+  cancelled
+}
+
+model ScheduledAlert {
+  id     String @id @default(cuid())
+  userId String @map("user_id") @db.VarChar(30)
+
+  alertType ScheduledAlertType @map("alert_type")
+
+  scheduledFor DateTime @map("scheduled_for")
+  payload      Json?
+
+  status  ScheduledAlertStatus @default(pending)
+  firedAt DateTime?            @map("fired_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([userId, scheduledFor])
+  @@map("scheduled_alerts")
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────

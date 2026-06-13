@@ -15,6 +15,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { EmptyState, useToast, VoiceDumpButton } from '@focus-forge/ui';
 import type {
@@ -37,9 +38,18 @@ import { MorningRitual } from './MorningRitual';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
+/** Compact summary of an active Doorknob session, surfaced on Today. */
+export type DoorknobSummary = {
+  departAtIso: string;
+  startAtIso: string;
+  arrivalAtIso: string;
+  positionState: 'before_start' | 'in_zone' | 'arrived';
+};
+
 export type TodayClientProps = {
   view: TodayViewResult;
   displayName: string;
+  doorknob?: DoorknobSummary | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -108,7 +118,7 @@ function QueueRow({ item }: { item: QueueItem }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TodayClient({ view, displayName }: TodayClientProps) {
+export function TodayClient({ view, displayName, doorknob }: TodayClientProps) {
   const router = useRouter();
   const { addToast } = useToast();
 
@@ -483,6 +493,46 @@ export function TodayClient({ view, displayName }: TodayClientProps) {
           onComplete={handleRitualComplete}
           onSkip={handleRitualSkip}
         />
+      )}
+
+      {/* ── Active Doorknob summary ── */}
+      {doorknob && (
+        <Link
+          href="/doorknob"
+          aria-label={`Doorknob: leave by ${fmtTime(new Date(doorknob.departAtIso))}. Open the timeline.`}
+          className={[
+            'block rounded-2xl border px-5 py-4 transition-colors',
+            doorknob.positionState === 'in_zone'
+              ? 'border-[var(--accent)] bg-[var(--bg-elevated)]'
+              : 'border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)]',
+          ].join(' ')}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+                <span aria-hidden="true">🚪</span>
+                {doorknob.positionState === 'in_zone'
+                  ? 'Time to start getting ready'
+                  : 'Heading out later'}
+              </p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                Leave by{' '}
+                <span className="font-medium text-[var(--text-primary)]">
+                  {fmtTime(new Date(doorknob.departAtIso))}
+                </span>
+                {doorknob.positionState === 'before_start' && (
+                  <> · start wrapping up at {fmtTime(new Date(doorknob.startAtIso))}</>
+                )}
+              </p>
+            </div>
+            <span
+              className="shrink-0 text-xs font-medium text-[var(--text-secondary)]"
+              aria-hidden="true"
+            >
+              Open →
+            </span>
+          </div>
+        </Link>
       )}
 
       {/* ── Card area: active anchors + flex tasks ── */}

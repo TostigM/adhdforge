@@ -177,16 +177,22 @@ app/
 ├── timer/                      # Analog focus timer (M6)
 │   ├── page.tsx                # Reads sound/haptics prefs → TimerClient
 │   └── _components/TimerClient.tsx   # Wedge, Web-Audio sound, pause/resume, PiP
+├── doorknob/                   # Reverse Scheduler / Doorknob (M8)
+│   ├── page.tsx                # getActiveDoorknob → DoorknobSetup or DoorknobClient
+│   └── _components/            # DoorknobSetup (3 questions) + DoorknobClient (live timeline)
 ├── admin/                      # Admin console (gated by feature_grants)
 │   └── users/[id]/
 └── api/
     ├── auth/[...nextauth]/     # NextAuth route handler
     ├── sync/route.ts           # 5-second polling endpoint (returns events since ?since=)
     ├── timer/complete/route.ts # Pop-out timer POSTs here on completion (M6)
-    └── voice-dump/route.ts     # M7: audio → Whisper → GPT parse → tasks (quota-gated)
+    ├── voice-dump/route.ts     # M7: audio → Whisper → GPT parse → tasks (quota-gated)
+    └── cron/hourly/route.ts    # M8: hourly dispatcher (CRON_SECRET-gated); sweeps due scheduled_alerts
 ```
 
 **Voice Dump (M7):** `OPENAI_API_KEY` must be in `apps/web/.env.local` (set in Vercel for prod ✅). The `/api/voice-dump` route checks the daily quota (`checkQuota`, fail-open) *before* any paid OpenAI call; audio is never persisted (Rule 9). Quota helpers live in `@focus-forge/domain/quota/*`.
+
+**Doorknob (M8):** A session is persisted as its `scheduled_alerts` rows (no `doorknob_sessions` table) — see AGENTS.md §5.18. Domain in `@focus-forge/domain/doorknob/*`; zone notifications are client-side; the hourly cron (`/api/cron/hourly`) is the bookkeeping backstop and needs `CRON_SECRET` in env. An active session also surfaces as a calm summary card on the Today dashboard.
 
 All non-trivial logic lives in `server-actions/` or `packages/domain/` — pages are thin.
 

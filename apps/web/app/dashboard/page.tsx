@@ -15,10 +15,11 @@ import { db } from '@focus-forge/database/client';
 import { getOrCreateTodayPlan } from '@focus-forge/domain/daily-plan/get-or-create-today-plan';
 import { getPlanDate } from '@focus-forge/domain/daily-plan/plan-day';
 import { getTodayView } from '@focus-forge/domain/daily-plan/get-today-view';
+import { getActiveDoorknob } from '@focus-forge/domain/doorknob/get-active-doorknob';
 import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
 
 import { authOptions } from '@/lib/auth';
-import { TodayClient } from './_components/TodayClient';
+import { TodayClient, type DoorknobSummary } from './_components/TodayClient';
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -29,12 +30,13 @@ export default async function DashboardPage() {
   // Today's plan-day label (rolls over at midnight in the workday timezone)
   const planDate = getPlanDate();
 
-  const [user, plan] = await Promise.all([
+  const [user, plan, doorknobResult] = await Promise.all([
     db.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true, preferences: true },
     }),
     getOrCreateTodayPlan(db, userId, planDate),
+    getActiveDoorknob(db, userId),
   ]);
 
   const { gentleReframeEnabled, gentleReframeThreshold } = parsePreferences(user?.preferences);
@@ -46,6 +48,17 @@ export default async function DashboardPage() {
     // When reframe is disabled, use an unreachable threshold so the card never shows
     gentleReframeEnabled ? gentleReframeThreshold : Number.MAX_SAFE_INTEGER,
   );
+
+  // Active Doorknob session (if any) surfaces as a calm summary on Today.
+  const active = doorknobResult.ok ? doorknobResult.value : null;
+  const doorknob: DoorknobSummary | null = active
+    ? {
+        departAtIso: active.schedule.departAt.toISOString(),
+        startAtIso: active.schedule.startAt.toISOString(),
+        arrivalAtIso: active.schedule.arrivalAt.toISOString(),
+        positionState: active.position.state,
+      }
+    : null;
 
   const displayName =
     user?.name?.split(' ')[0] ??
@@ -66,6 +79,12 @@ export default async function DashboardPage() {
           ⏱ Focus timer
         </Link>
         <Link
+          href="/doorknob"
+          className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+        >
+          🚪 Doorknob
+        </Link>
+        <Link
           href="/account"
           className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
         >
@@ -73,7 +92,7 @@ export default async function DashboardPage() {
         </Link>
       </nav>
 
-      <TodayClient view={view} displayName={displayName} />
+      <TodayClient view={view} displayName={displayName} doorknob={doorknob} />
     </div>
   );
 }

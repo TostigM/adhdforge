@@ -34,6 +34,7 @@ export { ToastProvider, useToast } from './components/Toast';
 export { TaskCard }       from './components/TaskCard';
 export { AnalogTimer }    from './components/AnalogTimer';
 export { VoiceDumpButton } from './components/VoiceDumpButton';
+export { DoorknobTimeline } from './components/DoorknobTimeline';
 
 // ── Feedback ─────────────────────────────────────────────────────────────────
 export { EmptyState }     from './components/EmptyState';
@@ -62,3 +63,4 @@ export type { SkeletonLoaderProps } from './components/SkeletonLoader';
 export type { TaskCardProps, TaskCardTask } from './components/TaskCard';
 export type { AnalogTimerProps, AnalogTimerZone } from './components/AnalogTimer';
 export type { VoiceDumpButtonProps } from './components/VoiceDumpButton';
+export type { DoorknobTimelineProps, DoorknobTimelineZone } from './components/DoorknobTimeline';
