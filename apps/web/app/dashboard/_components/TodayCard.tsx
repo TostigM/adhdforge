@@ -4,7 +4,7 @@
  * TodayCard — task card for the Today visible set
  * ──────────────────────────────────────────────────────────────────────────────
  * Differs from the backlog TaskCard:
- *   • "Done. Next step."   → completes the plan item + triggers bubble-up
+ *   • "Done"               → completes the plan item + triggers bubble-up
  *   • "Push it back"       → swaps flexible task to queue end (no button for anchors)
  *   • Anchors show a pin indicator and cannot be swapped (time-true)
  *   • Gentle Reframe card is shown inline when needed
@@ -162,7 +162,7 @@ export function TodayCard({
             'disabled:opacity-50',
           ].join(' ')}
         >
-          {completePending ? 'Completing…' : 'Done. Next step.'}
+          {completePending ? 'Completing…' : 'Done'}
         </button>
 
         {/* Anchors cannot be swapped — they're time-true */}

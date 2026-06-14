@@ -92,7 +92,7 @@ test.describe('Today core loop', () => {
     // Complete the first card's task
     const firstCard = page.getByRole('article').first();
     const firstText = await firstCard.getByRole('paragraph').first().textContent();
-    await firstCard.getByRole('button', { name: 'Done. Next step.' }).click();
+    await firstCard.getByRole('button', { name: 'Done', exact: true }).click();
 
     // Still 3 cards after bubble-up, and the completed text is gone
     await expect(page.getByRole('article')).toHaveCount(3);
