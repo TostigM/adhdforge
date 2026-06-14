@@ -860,7 +860,7 @@ All 7 daily-plan modules exported as `"./daily-plan/<name>"` paths (added `refra
 
 **Deviations from the roadmap text:** page lives at `app/doorknob/` (the repo has no `(app)` route group); "scheduled alerts fire on time" is satisfied client-side with the hourly server sweep as backstop (see decision above); setup is a single calm form rather than a 3-step wizard (same three questions, less navigation).
 
-**⚠ Deploy prerequisites (human):** add `CRON_SECRET` to Vercel env (`openssl rand -base64 32`); confirm the Vercel project's Root Directory — `vercel.json` (cron config) sits at the repo root and must move into `apps/web/` if the project root is set there.
+**Deploy prerequisites:** `CRON_SECRET` added to Vercel env ✅ (Session 12). Vercel Root Directory is **`apps/web`**, so `vercel.json` (cron config) lives at `apps/web/vercel.json` ✅ (moved Session 12 — a repo-root vercel.json would be invisible to Vercel with this setting). Still pending for sign-in on the custom domain `focusforge.tostigames.com`: set `NEXTAUTH_URL` to the domain + add its `/api/auth/callback/google` to the Google OAuth client.
 
 ---
 
