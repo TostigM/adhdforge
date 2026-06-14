@@ -1,16 +1,18 @@
 /**
- * Hourly Cron Dispatcher — doc 04 §9
+ * Cron Dispatcher — doc 04 §9
  * ──────────────────────────────────────────────────────────────────────────────
- * Vercel Hobby allows 2 cron jobs; all scheduled work funnels through this one
- * hourly dispatcher. Each handler is independent and idempotent — a delayed or
- * doubled run does the right thing.
+ * All scheduled work funnels through this one dispatcher. Each handler is
+ * independent and idempotent — a delayed or doubled run does the right thing.
  *
- * M8 ships the first handler: runScheduledAlertsDue. NOTE its limits — an
- * hourly server cron cannot deliver minute-precise zone notifications, and
- * there is no web-push infrastructure. Real-time nudges are client-side
- * (DoorknobClient schedules browser Notifications while open). This handler is
- * the bookkeeping backstop: it retires due alerts so stale sessions resolve,
- * and logs an event per sweep for observability.
+ * SCHEDULE: the Vercel Hobby plan only allows DAILY crons, so vercel.json runs
+ * this once a day (the route path keeps the legacy "hourly" name). That's fine:
+ * this is purely a bookkeeping backstop. It cannot — and is not meant to —
+ * deliver minute-precise zone notifications; those are client-side
+ * (DoorknobClient schedules browser Notifications while the page is open). On a
+ * Pro plan the schedule can be tightened in vercel.json without code changes.
+ *
+ * M8 ships the first handler: runScheduledAlertsDue — retires due alerts so
+ * stale sessions resolve, and logs an event per sweep for observability.
  */
 
 import { NextResponse } from 'next/server';

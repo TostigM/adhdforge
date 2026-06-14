@@ -40,3 +40,5 @@ node_modules/.prisma/
 coverage/
 playwright-report/
 test-results/
+
+.vercel

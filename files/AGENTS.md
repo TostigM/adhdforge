@@ -838,7 +838,9 @@ All 7 daily-plan modules exported as `"./daily-plan/<name>"` paths (added `refra
 
 ### 5.18 M8 Implementation Record — Reverse Scheduler / Doorknob
 
-**Status:** Complete. Backward-calculated, color-zoned departure timeline with one-click "+15", client-side zone notifications, an active-session summary on Today, and the hourly cron dispatcher. All tests green (298 domain, 34 E2E).
+**Status:** Complete. Backward-calculated, color-zoned departure timeline with one-click "+15", client-side zone notifications, an active-session summary on Today, and the daily cron dispatcher. All tests green (298 domain, 34 E2E).
+
+**⚠ Vercel Hobby gotcha (Session 12):** the Hobby plan only allows **daily** crons — an hourly `0 * * * *` in `vercel.json` makes Vercel **reject the deploy at creation** ("Hobby accounts are limited to daily cron jobs"), and a rejected deploy never appears in the Deployments list (looked exactly like a dead webhook). Schedule is now `0 8 * * *` (daily). Separately, **`prisma generate` must run in the build**, not just `postinstall`: Vercel reuses cached `node_modules` when the lockfile is unchanged, skipping install → stale Prisma client missing new models (e.g. `scheduledAlert`) → type error in the cron route. Fixed by `apps/web` build = `prisma generate … && next build` (+ `prisma` devDep on web).
 
 **Schema:** `ScheduledAlert` model (`scheduled_alerts`, §4.14 verbatim: alert_type/scheduled_for/payload/status/fired_at, cuid PK, pending+scheduledFor and user+scheduledFor indexes). Pushed via `db:push`.
 
