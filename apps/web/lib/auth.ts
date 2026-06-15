@@ -35,7 +35,7 @@ async function sendVerificationRequest({
   url: string;
   provider: { from: string };
 }) {
-  await getResend().emails.send({
+  const { error } = await getResend().emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
     to: email,
     subject: 'Sign in to Focus Forge',
@@ -60,6 +60,16 @@ async function sendVerificationRequest({
     `,
     text: `Sign in to Focus Forge: ${url}\n\nThis link expires in 15 minutes.`,
   });
+
+  // The Resend SDK returns errors as a value, not a throw. Surface them so a
+  // failed send becomes a visible sign-in error instead of a silent "check
+  // your email" with no email (e.g. the onboarding@resend.dev sandbox sender
+  // rejects any recipient that isn't the Resend account's own address — verify
+  // a domain and set RESEND_FROM_EMAIL to fix).
+  if (error) {
+    console.error('[auth] magic-link send failed:', error);
+    throw new Error(`Failed to send sign-in email: ${error.message ?? 'unknown error'}`);
+  }
 }
 
 // ─── Input validation schemas ─────────────────────────────────────────────────
