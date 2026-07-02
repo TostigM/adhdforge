@@ -45,34 +45,39 @@ export async function completeTodayItem(
     if (item.dailyPlan.userId !== input.userId) return err('forbidden', 'Access denied.');
     if (item.slotState !== 'today') return err('item_not_in_today', 'Item is not in the visible set.');
 
-    // Mark plan item as done
-    await db.dailyPlanItem.update({
-      where: { id: input.itemId },
-      data: { slotState: 'done', completedAt: new Date() },
+    // Plan item + task + event commit atomically — a mid-sequence failure on a
+    // slow connection must not leave a done card pointing at an active task.
+    const taskWasCompleted = item.task.status !== 'completed';
+    await db.$transaction(async (tx) => {
+      await tx.dailyPlanItem.update({
+        where: { id: input.itemId },
+        data: { slotState: 'done', completedAt: new Date() },
+      });
+
+      if (taskWasCompleted) {
+        await tx.task.update({
+          where: { id: item.task.id },
+          data: { status: 'completed', completedAt: new Date() },
+        });
+
+        // Append-only event log — badge engine reads from this
+        await tx.event.create({
+          data: {
+            userId: input.userId,
+            eventType: 'task.completed',
+            payload: { taskId: item.task.id },
+          },
+        });
+      }
     });
 
-    // Complete the underlying task (if not already completed)
-    if (item.task.status !== 'completed') {
-      await db.task.update({
-        where: { id: item.task.id },
-        data: { status: 'completed', completedAt: new Date() },
-      });
-
-      // Log event for badge engine
-      await db.event.create({
-        data: {
-          userId: input.userId,
-          eventType: 'task.completed',
-          payload: { taskId: item.task.id },
-        },
-      });
-
-      // Check badges (non-fatal)
+    // Check badges (after the transaction — non-fatal if it fails)
+    if (taskWasCompleted) {
       try {
         const { checkAndAward } = await import('../badges/check-and-award');
         await checkAndAward(db, input.userId, 'task.completed');
-      } catch {
-        // Badge engine failure is non-fatal
+      } catch (e) {
+        console.error('[badge] check-and-award failed after task.completed:', e);
       }
     }
 
