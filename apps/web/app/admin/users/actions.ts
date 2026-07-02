@@ -44,24 +44,29 @@ export async function createUser(formData: FormData) {
   const existing = await db.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) redirect(`/admin/users/new?error=email_exists`);
 
-  // Create the user — admin-created accounts are pre-verified and active
-  const user = await db.user.create({
-    data: {
-      email,
-      name,
-      tier:          tier as never,
-      accountState:  'active',
-      emailVerified: new Date(), // pre-verified by admin
-    },
-  });
+  // Create the user — admin-created accounts are pre-verified and active.
+  // Audit row + creation commit atomically (PROGRAMMING-PRACTICES §10).
+  const user = await db.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        email,
+        name,
+        tier:          tier as never,
+        accountState:  'active',
+        emailVerified: new Date(), // pre-verified by admin
+      },
+    });
 
-  await logAdminAction({
-    db,
-    adminUserId: adminId,
-    targetUserId: user.id,
-    action: 'admin_create_user',
-    justification: note || `Admin-created account. Tier: ${tier}.`,
-    metadata: { tier, sendInvite },
+    await logAdminAction({
+      db: tx,
+      adminUserId: adminId,
+      targetUserId: created.id,
+      action: 'admin_create_user',
+      justification: note || `Admin-created account. Tier: ${tier}.`,
+      metadata: { tier, sendInvite },
+    });
+
+    return created;
   });
 
   // Optionally send a sign-in invite email

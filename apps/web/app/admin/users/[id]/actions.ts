@@ -38,25 +38,36 @@ export async function pauseUser(userId: string, formData: FormData) {
 
   if (!justification) redirect(`/admin/users/${userId}/pause?error=1`);
 
+  // Validate the optional expiry date before it reaches Prisma (an Invalid
+  // Date would throw an unhandled error there).
+  let pausedUntil: Date | null = null;
+  if (pausedUntilRaw) {
+    pausedUntil = new Date(pausedUntilRaw);
+    if (Number.isNaN(pausedUntil.getTime())) redirect(`/admin/users/${userId}/pause?error=1`);
+  }
+
   const user = await db.user.findUnique({ where: { id: userId }, select: {
     accountState: true, tier: true, pausedUntil: true, pausedReason: true,
     suspendedReason: true, compExpiresAt: true,
   }});
   if (!user) redirect('/admin/users');
 
-  await logAdminAction({
-    db, adminUserId: adminId, targetUserId: userId,
-    action: 'pause_user', justification,
-    stateBefore: captureUserState(user),
-  });
-
-  await db.user.update({
-    where: { id: userId },
-    data: {
-      accountState: 'paused',
-      pausedReason: reason || null,
-      pausedUntil:  pausedUntilRaw ? new Date(pausedUntilRaw) : null,
-    },
+  // Audit row + state change commit atomically — the trail never records an
+  // action that didn't happen (PROGRAMMING-PRACTICES §10).
+  await db.$transaction(async (tx) => {
+    await logAdminAction({
+      db: tx, adminUserId: adminId, targetUserId: userId,
+      action: 'pause_user', justification,
+      stateBefore: captureUserState(user),
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        accountState: 'paused',
+        pausedReason: reason || null,
+        pausedUntil,
+      },
+    });
   });
 
   redirect(`/admin/users/${userId}`);
@@ -76,15 +87,16 @@ export async function unpauseUser(userId: string, formData: FormData) {
   }});
   if (!user) redirect('/admin/users');
 
-  await logAdminAction({
-    db, adminUserId: adminId, targetUserId: userId,
-    action: 'unpause_user', justification,
-    stateBefore: captureUserState(user),
-  });
-
-  await db.user.update({
-    where: { id: userId },
-    data: { accountState: 'active', pausedReason: null, pausedUntil: null },
+  await db.$transaction(async (tx) => {
+    await logAdminAction({
+      db: tx, adminUserId: adminId, targetUserId: userId,
+      action: 'unpause_user', justification,
+      stateBefore: captureUserState(user),
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: { accountState: 'active', pausedReason: null, pausedUntil: null },
+    });
   });
 
   redirect(`/admin/users/${userId}`);
@@ -105,15 +117,19 @@ export async function suspendUser(userId: string, formData: FormData) {
   }});
   if (!user) redirect('/admin/users');
 
-  await logAdminAction({
-    db, adminUserId: adminId, targetUserId: userId,
-    action: 'suspend_user', justification,
-    stateBefore: captureUserState(user),
-  });
-
-  await db.user.update({
-    where: { id: userId },
-    data: { accountState: 'suspended', suspendedReason: reason || null },
+  await db.$transaction(async (tx) => {
+    await logAdminAction({
+      db: tx, adminUserId: adminId, targetUserId: userId,
+      action: 'suspend_user', justification,
+      stateBefore: captureUserState(user),
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: { accountState: 'suspended', suspendedReason: reason || null },
+    });
+    // Suspension blocks sign-in (doc 01 §4) — revoke live sessions too, so the
+    // block takes effect immediately instead of when the 30-day session expires.
+    await tx.session.deleteMany({ where: { userId } });
   });
 
   redirect(`/admin/users/${userId}`);
@@ -133,15 +149,16 @@ export async function unsuspendUser(userId: string, formData: FormData) {
   }});
   if (!user) redirect('/admin/users');
 
-  await logAdminAction({
-    db, adminUserId: adminId, targetUserId: userId,
-    action: 'unsuspend_user', justification,
-    stateBefore: captureUserState(user),
-  });
-
-  await db.user.update({
-    where: { id: userId },
-    data: { accountState: 'active', suspendedReason: null },
+  await db.$transaction(async (tx) => {
+    await logAdminAction({
+      db: tx, adminUserId: adminId, targetUserId: userId,
+      action: 'unsuspend_user', justification,
+      stateBefore: captureUserState(user),
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: { accountState: 'active', suspendedReason: null },
+    });
   });
 
   redirect(`/admin/users/${userId}`);
@@ -161,21 +178,22 @@ export async function softDeleteUser(userId: string, formData: FormData) {
   }});
   if (!user) redirect('/admin/users');
 
-  await logAdminAction({
-    db, adminUserId: adminId, targetUserId: userId,
-    action: 'soft_delete_user', justification,
-    stateBefore: captureUserState(user),
-  });
-
   // 30-day pending window; a scheduled job will purge after this date.
   const deleteAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  await db.user.update({
-    where: { id: userId },
-    data: {
-      accountState: 'pending_delete',
-      pendingDeleteAt: deleteAt,
-    },
+  await db.$transaction(async (tx) => {
+    await logAdminAction({
+      db: tx, adminUserId: adminId, targetUserId: userId,
+      action: 'soft_delete_user', justification,
+      stateBefore: captureUserState(user),
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        accountState: 'pending_delete',
+        pendingDeleteAt: deleteAt,
+      },
+    });
   });
 
   redirect(`/admin/users/${userId}`);
@@ -197,14 +215,16 @@ export async function emergencyDeleteUser(userId: string, formData: FormData) {
   }});
   if (!user) redirect('/admin/users');
 
-  // Log BEFORE deletion so targetUserId is still valid (SET NULL fires after).
-  await logAdminAction({
-    db, adminUserId: adminId, targetUserId: userId,
-    action: 'emergency_delete_user', justification,
-    stateBefore: captureUserState(user),
+  // Log BEFORE the delete within the transaction so targetUserId is still
+  // valid when the row is written (the FK SET NULL fires at delete time).
+  await db.$transaction(async (tx) => {
+    await logAdminAction({
+      db: tx, adminUserId: adminId, targetUserId: userId,
+      action: 'emergency_delete_user', justification,
+      stateBefore: captureUserState(user),
+    });
+    await tx.user.delete({ where: { id: userId } });
   });
-
-  await db.user.delete({ where: { id: userId } });
 
   redirect('/admin/users');
 }
@@ -291,26 +311,34 @@ export async function grantCompTier(userId: string, formData: FormData) {
 
   if (!justification) redirect(`/admin/users/${userId}/grant-comp?error=1`);
 
+  // Validate the optional expiry date before it reaches Prisma.
+  let compExpiresAt: Date | null = null;
+  if (expiresAtRaw) {
+    compExpiresAt = new Date(expiresAtRaw);
+    if (Number.isNaN(compExpiresAt.getTime())) redirect(`/admin/users/${userId}/grant-comp?error=1`);
+  }
+
   const user = await db.user.findUnique({ where: { id: userId }, select: {
     accountState: true, tier: true, pausedUntil: true, pausedReason: true,
     suspendedReason: true, compExpiresAt: true,
   }});
   if (!user) redirect('/admin/users');
 
-  await logAdminAction({
-    db, adminUserId: adminId, targetUserId: userId,
-    action: 'grant_comp', justification,
-    stateBefore: captureUserState(user),
-    metadata: { compReason, expiresAt: expiresAtRaw || null },
-  });
-
-  await db.user.update({
-    where: { id: userId },
-    data: {
-      tier: 'comp',
-      compReason:    compReason || null,
-      compExpiresAt: expiresAtRaw ? new Date(expiresAtRaw) : null,
-    },
+  await db.$transaction(async (tx) => {
+    await logAdminAction({
+      db: tx, adminUserId: adminId, targetUserId: userId,
+      action: 'grant_comp', justification,
+      stateBefore: captureUserState(user),
+      metadata: { compReason, expiresAt: expiresAtRaw || null },
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        tier: 'comp',
+        compReason:    compReason || null,
+        compExpiresAt,
+      },
+    });
   });
 
   redirect(`/admin/users/${userId}`);

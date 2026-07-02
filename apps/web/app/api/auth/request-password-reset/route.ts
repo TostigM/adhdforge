@@ -39,6 +39,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // Rate limit: max 3 reset emails per account per hour (DB-backed, so it holds
+  // across serverless instances). The response is identical to the success path
+  // — anti-enumeration also means not revealing that a limit was hit.
+  const windowStart = new Date(Date.now() - 60 * 60 * 1000);
+  const recentRequests = await db.auditLog.count({
+    where: {
+      userId: user.id,
+      eventType: 'password_reset_requested',
+      createdAt: { gte: windowStart },
+    },
+  });
+  if (recentRequests >= 3) {
+    return NextResponse.json({ ok: true });
+  }
+
   // Generate a secure token
   const tokenRaw   = crypto.randomBytes(32);
   const tokenHex   = tokenRaw.toString('hex');         // sent in the email link
@@ -49,7 +64,7 @@ export async function POST(req: NextRequest) {
   // Invalidate any existing tokens for this user
   await db.passwordResetToken.deleteMany({ where: { userId: user.id } });
 
-  // Store the hashed token
+  // Store the hashed token + count this request toward the rate-limit window
   await db.passwordResetToken.create({
     data: {
       userId:    user.id,
@@ -57,6 +72,9 @@ export async function POST(req: NextRequest) {
       tokenHash: tokenHash,
       expiresAt: expiresAt,
     },
+  });
+  await db.auditLog.create({
+    data: { userId: user.id, eventType: 'password_reset_requested' },
   });
 
   const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password/${tokenHex}`;

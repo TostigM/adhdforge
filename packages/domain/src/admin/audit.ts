@@ -25,7 +25,8 @@ const JUSTIFICATION_REQUIRED_ACTIONS = new Set([
 ]);
 
 export interface LogAdminActionInput {
-  db: PrismaClient;
+  /** Accepts a transaction client so the audit row and the state change can commit atomically. */
+  db: PrismaClient | Prisma.TransactionClient;
   adminUserId: string;
   targetUserId?: string;
   action: string;
@@ -40,9 +41,9 @@ export interface LogAdminActionInput {
 
 /**
  * Insert a row into admin_actions.
- * Call this inside every admin server action, before or after the state change.
- * (Prefer before for destructive actions so the trail exists even if the
- * main action partially fails.)
+ * Call this inside every admin server action, in the SAME transaction as the
+ * state change (pass the transaction client as `db`) — the trail must never
+ * record an action that didn't commit, nor miss one that did.
  */
 export async function logAdminAction({
   db,

@@ -35,6 +35,20 @@ async function sendVerificationRequest({
   url: string;
   provider: { from: string };
 }) {
+  // Rate limit: max 3 magic-link emails per address per token lifetime (15 min).
+  // Counts unexpired verification tokens — NextAuth's adapter creates the token
+  // for THIS send before calling us, hence `>` rather than `>=`. DB-backed, so
+  // it holds across serverless instances. Protects both the recipient's inbox
+  // and the Resend daily quota (100/day free) from being burned by a loop.
+  const outstanding = await db.verificationToken.count({
+    where: { identifier: email, expires: { gt: new Date() } },
+  });
+  if (outstanding > 3) {
+    throw new Error(
+      'A few sign-in emails are already on their way — please use one of those, or try again in 15 minutes.',
+    );
+  }
+
   const { error } = await getResend().emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
     to: email,
@@ -231,13 +245,13 @@ export const authOptions: NextAuthOptions = {
 
   events: {
     // Log successful sign-ins to audit_log
-    async signIn({ user, isNewUser }) {
+    async signIn({ user, account, isNewUser }) {
       if (!user.id) return;
       await db.auditLog.create({
         data: {
           userId: user.id,
           eventType: isNewUser ? 'signup' : 'signin',
-          metadata: { provider: 'unknown' }, // provider detail not available here
+          metadata: { provider: account?.provider ?? 'unknown' },
         },
       });
     },

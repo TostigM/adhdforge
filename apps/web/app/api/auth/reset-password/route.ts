@@ -17,13 +17,18 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  let token: string, password: string;
-  try {
-    const body = await req.json();
-    ({ token, password } = schema.parse(body));
-  } catch {
-    return NextResponse.json({ error: 'weak_password' }, { status: 400 });
+  const raw = await req.json().catch(() => null);
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    // Name the actual problem: a short password is 'weak_password'; a missing
+    // or malformed token (or unparseable body) is 'token_invalid'.
+    const weakPassword = parsed.error.issues.some((i) => i.path[0] === 'password');
+    return NextResponse.json(
+      { error: weakPassword ? 'weak_password' : 'token_invalid' },
+      { status: 400 },
+    );
   }
+  const { token, password } = parsed.data;
 
   // Hash the raw hex token to compare against stored hash
   let tokenBytes: Buffer;
@@ -56,7 +61,10 @@ export async function POST(req: NextRequest) {
     parallelism: 1,
   });
 
-  // Update user password + mark token as used in a transaction
+  // Update password + mark token used + revoke every live session, atomically.
+  // Session revocation matters when the reset is because the account was
+  // compromised: without it, an attacker's stolen session survives the reset
+  // for up to 30 days. The user simply signs in again with the new password.
   await db.$transaction([
     db.user.update({
       where: { id: record.userId },
@@ -66,6 +74,7 @@ export async function POST(req: NextRequest) {
       where: { id: record.id },
       data:  { usedAt: new Date() },
     }),
+    db.session.deleteMany({ where: { userId: record.userId } }),
   ]);
 
   return NextResponse.json({ ok: true });
