@@ -37,6 +37,8 @@ export type CreateTaskError =
   | 'raw_text_empty'
   | 'raw_text_too_long'
   | 'cant_miss_requires_anchor'
+  | 'estimated_minutes_invalid'
+  | 'scheduled_for_invalid'
   | 'db_error';
 
 export type CreateTaskResult = Result<Task, CreateTaskError>;
@@ -44,6 +46,9 @@ export type CreateTaskResult = Result<Task, CreateTaskError>;
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 const MAX_RAW_TEXT = 10_000;
+// A week — generous, but stops nonsense values (negative, NaN, "a million minutes")
+// from a hand-crafted request reaching the DB.
+const MAX_ESTIMATED_MINUTES = 10_080;
 
 function validate(input: CreateTaskInput): Err<CreateTaskError> | undefined {
   const text = input.rawText.trim();
@@ -54,6 +59,20 @@ function validate(input: CreateTaskInput): Err<CreateTaskError> | undefined {
   // Soft-Track: cant_miss is ONLY valid for anchor tasks
   if (input.priorityLevel === 'cant_miss' && input.priorityKind !== 'anchor') {
     return err('cant_miss_requires_anchor', "'cant_miss' priority is only valid for anchor tasks.");
+  }
+
+  if (input.estimatedMinutes !== undefined) {
+    if (
+      !Number.isInteger(input.estimatedMinutes) ||
+      input.estimatedMinutes < 1 ||
+      input.estimatedMinutes > MAX_ESTIMATED_MINUTES
+    ) {
+      return err('estimated_minutes_invalid', 'Estimate must be between 1 minute and a week.');
+    }
+  }
+
+  if (input.scheduledFor !== undefined && Number.isNaN(input.scheduledFor.getTime())) {
+    return err('scheduled_for_invalid', "That date didn't come through — please pick it again.");
   }
 
   return undefined;

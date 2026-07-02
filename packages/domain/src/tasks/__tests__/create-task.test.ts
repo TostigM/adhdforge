@@ -77,6 +77,39 @@ describe('createTask', () => {
       });
       expect(result.ok).toBe(true);
     });
+
+    // Session 13 hardening: server actions pass client input through with
+    // compile-time types only, so the domain must reject nonsense values.
+    it.each([[-5], [0], [1.5], [Number.NaN], [10_081]])(
+      'rejects estimatedMinutes = %s',
+      async (estimatedMinutes) => {
+        const result = await createTask(db, { ...BASE_INPUT, estimatedMinutes });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error).toBe('estimated_minutes_invalid');
+      },
+    );
+
+    it('accepts a valid estimatedMinutes', async () => {
+      const result = await createTask(db, { ...BASE_INPUT, estimatedMinutes: 25 });
+      expect(result.ok).toBe(true);
+    });
+
+    it('rejects an Invalid Date scheduledFor', async () => {
+      const result = await createTask(db, {
+        ...BASE_INPUT,
+        scheduledFor: new Date('not a date'),
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toBe('scheduled_for_invalid');
+    });
+
+    it('accepts a valid scheduledFor', async () => {
+      const result = await createTask(db, {
+        ...BASE_INPUT,
+        scheduledFor: new Date('2026-07-02T09:30:00Z'),
+      });
+      expect(result.ok).toBe(true);
+    });
   });
 
   // ── Happy path ──────────────────────────────────────────────────────────────
