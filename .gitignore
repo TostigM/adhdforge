@@ -14,6 +14,9 @@ build/
 out/
 *.tsbuildinfo
 
+# Local archive snapshots — keep out of the repo (17 tracked zips removed Session 13)
+*.zip
+
 # Environment — NEVER commit these
 .env
 .env.local
