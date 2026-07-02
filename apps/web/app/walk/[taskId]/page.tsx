@@ -10,12 +10,11 @@
  * See 06-build-roadmap.md §5.2
  */
 
-import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 
 import { db } from '@focus-forge/database/client';
-import { authOptions } from '@/lib/auth';
+import { requirePageUser } from '@/lib/require-user';
 import { WalkThrough } from './_components/WalkThrough';
 
 export default async function WalkPage({
@@ -25,11 +24,10 @@ export default async function WalkPage({
 }) {
   const { taskId } = await params;
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect(`/signin?callbackUrl=/walk/${taskId}`);
+  const { userId } = await requirePageUser(`/walk/${taskId}`);
 
   const task = await db.task.findFirst({
-    where: { id: taskId, userId: session.user.id },
+    where: { id: taskId, userId },
     select: {
       id: true,
       rawText: true,

@@ -6,13 +6,12 @@
  * Shifts the whole remaining Doorknob schedule later. One click, no judgment.
  */
 
-import { getServerSession } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@focus-forge/database/client';
 import { recalculateLate } from '@focus-forge/domain/doorknob/recalculate-late';
 
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 
 export type RecalculateLateActionResult =
   | { ok: true }
@@ -22,13 +21,13 @@ export async function recalculateLateAction(
   sessionId: string,
   minutes = 15,
 ): Promise<RecalculateLateActionResult> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return { ok: false, error: 'unauthenticated', message: 'Please sign in.' };
+  const auth = await requireUser('mutate_data');
+  if (!auth.ok) {
+    return { ok: false, error: auth.error, message: auth.message };
   }
 
   const result = await recalculateLate(db, {
-    userId: session.user.id,
+    userId: auth.userId,
     sessionId,
     minutes,
   });

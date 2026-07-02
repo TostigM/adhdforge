@@ -6,13 +6,12 @@
  * Starts a Reverse Scheduler session from the setup form.
  */
 
-import { getServerSession } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@focus-forge/database/client';
 import { createDoorknobSession } from '@focus-forge/domain/doorknob/create-doorknob-session';
 
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 
 export type CreateDoorknobActionInput = {
   arrivalAtIso: string;
@@ -28,14 +27,14 @@ export type CreateDoorknobActionResult =
 export async function createDoorknobSessionAction(
   input: CreateDoorknobActionInput,
 ): Promise<CreateDoorknobActionResult> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return { ok: false, error: 'unauthenticated', message: 'Please sign in.' };
+  const auth = await requireUser('create_data');
+  if (!auth.ok) {
+    return { ok: false, error: auth.error, message: auth.message };
   }
 
   const arrivalAt = new Date(input.arrivalAtIso);
   const result = await createDoorknobSession(db, {
-    userId: session.user.id,
+    userId: auth.userId,
     arrivalAt,
     transitMinutes: input.transitMinutes,
     gatherMinutes: input.gatherMinutes,

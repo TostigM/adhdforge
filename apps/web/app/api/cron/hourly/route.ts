@@ -21,6 +21,31 @@ import { db } from '@focus-forge/database/client';
 
 export const runtime = 'nodejs';
 
+/**
+ * Restores accounts whose moderation pause has expired (doc 01 §4).
+ * The account-state guard already treats an expired pause as active on read,
+ * so this sweep is bookkeeping — it heals the stored state.
+ */
+async function restoreExpiredPauses(): Promise<{ restored: number }> {
+  const now = new Date();
+  const { count } = await db.user.updateMany({
+    where: { accountState: 'paused', pausedUntil: { lt: now } },
+    data: { accountState: 'active', pausedReason: null, pausedUntil: null },
+  });
+
+  if (count > 0) {
+    await db.event.create({
+      data: {
+        userId: null, // system event
+        eventType: 'cron.pauses_restored',
+        payload: { restored: count },
+      },
+    });
+  }
+
+  return { restored: count };
+}
+
 async function runScheduledAlertsDue(): Promise<{ fired: number }> {
   const now = new Date();
   const { count } = await db.scheduledAlert.updateMany({
@@ -50,6 +75,7 @@ export async function GET(req: Request) {
 
   const results = await Promise.allSettled([
     runScheduledAlertsDue(),
+    restoreExpiredPauses(),
     // Future handlers per doc 04 §9: launchpad resets (M9), routine instances (M17),
     // account deletion purge (M15), comp tier expiration, token cleanup…
   ]);

@@ -7,33 +7,34 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { z } from 'zod';
 
 import { db } from '@focus-forge/database/client';
 import { endFocusSession } from '@focus-forge/domain/timer/focus-session';
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
+
+const bodySchema = z.object({
+  sessionId: z.string().min(1),
+  actualDurationSeconds: z.number().finite().nonnegative().optional(),
+});
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ ok: false, error: 'unauthenticated' }, { status: 401 });
+  const auth = await requireUser('mutate_data');
+  if (!auth.ok) {
+    const status = auth.error === 'unauthenticated' ? 401 : 403;
+    return NextResponse.json({ ok: false, error: auth.error, message: auth.message }, { status });
   }
 
-  let body: { sessionId?: string; actualDurationSeconds?: number };
-  try {
-    body = await request.json();
-  } catch {
+  const raw = await request.json().catch(() => null);
+  const parsed = bodySchema.safeParse(raw);
+  if (!parsed.success) {
     return NextResponse.json({ ok: false, error: 'bad_request' }, { status: 400 });
   }
 
-  if (!body.sessionId) {
-    return NextResponse.json({ ok: false, error: 'missing_session' }, { status: 400 });
-  }
-
   const result = await endFocusSession(db, {
-    sessionId: body.sessionId,
-    userId: session.user.id,
-    actualDurationSeconds: Math.max(0, Math.round(body.actualDurationSeconds ?? 0)),
+    sessionId: parsed.data.sessionId,
+    userId: auth.userId,
+    actualDurationSeconds: Math.round(parsed.data.actualDurationSeconds ?? 0),
     status: 'completed',
   });
 

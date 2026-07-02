@@ -11,14 +11,13 @@
  * in the client — they don't call this action.
  */
 
-import { getServerSession } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@focus-forge/database/client';
 import { reframeTodayItem } from '@focus-forge/domain/daily-plan/reframe-today-item';
 import type { ReframeAction } from '@focus-forge/domain/daily-plan/reframe-today-item';
 
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 
 export type ReframePlanItemResult =
   | { ok: true }
@@ -28,14 +27,14 @@ export async function reframePlanItemAction(
   taskId: string,
   action: ReframeAction,
 ): Promise<ReframePlanItemResult> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return { ok: false, error: 'unauthenticated', message: 'Please sign in.' };
+  const auth = await requireUser('mutate_data');
+  if (!auth.ok) {
+    return { ok: false, error: auth.error, message: auth.message };
   }
 
   const result = await reframeTodayItem(db, {
     taskId,
-    userId: session.user.id,
+    userId: auth.userId,
     action,
   });
 

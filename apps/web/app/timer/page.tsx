@@ -5,21 +5,18 @@
  * See 06-build-roadmap.md §6
  */
 
-import { getServerSession } from 'next-auth';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 
 import { db } from '@focus-forge/database/client';
 import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
-import { authOptions } from '@/lib/auth';
+import { requirePageUser } from '@/lib/require-user';
 import { TimerClient } from './_components/TimerClient';
 
 export default async function TimerPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect('/signin?callbackUrl=/timer');
+  const { userId } = await requirePageUser('/timer');
 
   const user = await db.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { preferences: true },
   });
   const prefs = parsePreferences(user?.preferences);

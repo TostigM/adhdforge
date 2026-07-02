@@ -11,10 +11,9 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 
 import { db } from '@focus-forge/database/client';
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 import { checkQuota } from '@focus-forge/domain/quota/check-quota';
 import { incrementQuota } from '@focus-forge/domain/quota/increment-quota';
 import { createTask } from '@focus-forge/domain/tasks/create-task';
@@ -24,12 +23,18 @@ import { parseTasks } from '@focus-forge/ai';
 
 export const runtime = 'nodejs'; // OpenAI SDK + Whisper need Node, not Edge
 
+// Cost guard: cap the audio we forward to the (paid) Whisper API. ~5 MB covers
+// several minutes of Opus/WebM; Vercel already rejects bodies over ~4.5 MB in
+// production, so this mostly protects local/self-hosted deployments.
+const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ ok: false, error: 'unauthenticated' }, { status: 401 });
+  const auth = await requireUser('create_data');
+  if (!auth.ok) {
+    const status = auth.error === 'unauthenticated' ? 401 : 403;
+    return NextResponse.json({ ok: false, error: auth.error, message: auth.message }, { status });
   }
-  const userId = session.user.id;
+  const userId = auth.userId;
 
   // ── Quota gate (before any paid OpenAI call) ────────────────────────────────
   const quota = await checkQuota(db, userId, 'voice_dump');
@@ -57,6 +62,9 @@ export async function POST(request: Request) {
   }
   if (!file || file.size === 0) {
     return NextResponse.json({ ok: false, error: 'no_audio' }, { status: 400 });
+  }
+  if (file.size > MAX_AUDIO_BYTES) {
+    return NextResponse.json({ ok: false, error: 'audio_too_large' }, { status: 413 });
   }
 
   // ── Transcribe ──────────────────────────────────────────────────────────────

@@ -202,21 +202,23 @@ All non-trivial logic lives in `server-actions/` or `packages/domain/` — pages
 
 ### Server Actions
 
-Every server action follows this structure:
+Every server action follows this structure (Session 13: auth goes through
+`requireUser`, which also enforces account state — paused = read-only,
+suspended = blocked):
 
 ```typescript
 'use server';
 
-import { getServerSession } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 import { db } from '@focus-forge/database/client';
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 
 export async function myAction(input: string): Promise<{ ok: true } | { ok: false; error: string; message?: string }> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return { ok: false, error: 'unauthenticated', message: 'Please sign in.' };
+  // 'create_data' for actions that create content, 'mutate_data' for the rest
+  const auth = await requireUser('mutate_data');
+  if (!auth.ok) return { ok: false, error: auth.error, message: auth.message };
 
-  const result = await domainFunction(db, { ...input, userId: session.user.id });
+  const result = await domainFunction(db, { ...input, userId: auth.userId });
   if (!result.ok) return { ok: false, error: result.error, message: result.message };
 
   revalidatePath('/dashboard');
@@ -224,7 +226,10 @@ export async function myAction(input: string): Promise<{ ok: true } | { ok: fals
 }
 ```
 
-`revalidatePath` is only called on success.
+`revalidatePath` is only called on success. Pages use `requirePageUser()` from
+the same module (redirects to /signin or the account-state landing page).
+Never call `getServerSession` directly in a new action — the guard is the
+single place account-state rules are enforced.
 
 ### Domain Functions
 

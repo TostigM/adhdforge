@@ -8,13 +8,12 @@
  * or queued.
  */
 
-import { getServerSession } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@focus-forge/database/client';
 import { addToTodayPlan } from '@focus-forge/domain/daily-plan/add-to-today-plan';
 
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 
 export type AddToPlanResult =
   | { ok: true; slotState: 'today' | 'queue' }
@@ -25,15 +24,15 @@ export async function addToPlanAction(
   taskId: string,
   source: 'ritual' | 'manual',
 ): Promise<AddToPlanResult> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return { ok: false, error: 'unauthenticated', message: 'Please sign in.' };
+  const auth = await requireUser('mutate_data');
+  if (!auth.ok) {
+    return { ok: false, error: auth.error, message: auth.message };
   }
 
   const result = await addToTodayPlan(db, {
     planId,
     taskId,
-    userId: session.user.id,
+    userId: auth.userId,
     source,
   });
 

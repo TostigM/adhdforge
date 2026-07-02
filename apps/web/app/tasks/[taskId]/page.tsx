@@ -7,12 +7,11 @@
  * See 06-build-roadmap.md §5.1
  */
 
-import { getServerSession } from 'next-auth';
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 
 import { db } from '@focus-forge/database/client';
-import { authOptions } from '@/lib/auth';
+import { requirePageUser } from '@/lib/require-user';
 import { StepsEditor } from './_components/StepsEditor';
 
 export default async function TaskDetailPage({
@@ -22,11 +21,10 @@ export default async function TaskDetailPage({
 }) {
   const { taskId } = await params;
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect(`/signin?callbackUrl=/tasks/${taskId}`);
+  const { userId } = await requirePageUser(`/tasks/${taskId}`);
 
   const task = await db.task.findFirst({
-    where: { id: taskId, userId: session.user.id },
+    where: { id: taskId, userId },
     select: {
       id: true,
       rawText: true,

@@ -4,22 +4,20 @@
  * Full settings (notifications, data export, password change) come in a later milestone.
  * See doc 01 §6 for UX spec.
  */
-import { getServerSession } from 'next-auth';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { authOptions } from '@/lib/auth';
 import { db } from '@focus-forge/database/client';
 import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
+import { requirePageUser } from '@/lib/require-user';
 import { TodaySettingsClient } from './_components/TodaySettingsClient';
 import { TimerSettingsClient } from './_components/TimerSettingsClient';
 
 export default async function AccountPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect('/signin?callbackUrl=/account');
+  const { userId } = await requirePageUser('/account');
 
   const user = await db.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: {
       id: true,
       email: true,

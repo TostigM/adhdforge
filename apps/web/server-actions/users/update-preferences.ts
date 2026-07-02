@@ -7,7 +7,6 @@
  * Called from the account settings page.
  */
 
-import { getServerSession } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@focus-forge/database/client';
@@ -15,7 +14,7 @@ import { getPlanDate } from '@focus-forge/domain/daily-plan/plan-day';
 import { updateUserPreferences } from '@focus-forge/domain/users/update-preferences';
 import type { UserPreferences } from '@focus-forge/domain/users/update-preferences';
 
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 
 export type UpdatePreferencesResult =
   | { ok: true }
@@ -24,12 +23,12 @@ export type UpdatePreferencesResult =
 export async function updatePreferencesAction(
   update: UserPreferences,
 ): Promise<UpdatePreferencesResult> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return { ok: false, error: 'unauthenticated', message: 'Please sign in.' };
+  const auth = await requireUser('mutate_data');
+  if (!auth.ok) {
+    return { ok: false, error: auth.error, message: auth.message };
   }
 
-  const result = await updateUserPreferences(db, session.user.id, update);
+  const result = await updateUserPreferences(db, auth.userId, update);
 
   if (!result.ok) {
     return { ok: false, error: result.error, message: result.message };
@@ -39,7 +38,7 @@ export async function updatePreferencesAction(
   if (update.visibleSlots !== undefined) {
     const today = getPlanDate();
     await db.dailyPlan.updateMany({
-      where: { userId: session.user.id, planDate: today },
+      where: { userId: auth.userId, planDate: today },
       data: { visibleSlots: update.visibleSlots },
     });
   }

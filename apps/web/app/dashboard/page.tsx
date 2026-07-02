@@ -7,9 +7,7 @@
  * See 02-design-system.md §13.5, 06-build-roadmap.md §4.5
  */
 
-import { getServerSession } from 'next-auth';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 
 import { db } from '@focus-forge/database/client';
 import { getOrCreateTodayPlan } from '@focus-forge/domain/daily-plan/get-or-create-today-plan';
@@ -18,14 +16,11 @@ import { getTodayView } from '@focus-forge/domain/daily-plan/get-today-view';
 import { getActiveDoorknob } from '@focus-forge/domain/doorknob/get-active-doorknob';
 import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
 
-import { authOptions } from '@/lib/auth';
+import { requirePageUser } from '@/lib/require-user';
 import { TodayClient, type DoorknobSummary } from './_components/TodayClient';
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect('/signin?callbackUrl=/dashboard');
-
-  const userId = session.user.id;
+  const { userId } = await requirePageUser('/dashboard');
 
   // Today's plan-day label (rolls over at midnight in the workday timezone)
   const planDate = getPlanDate();

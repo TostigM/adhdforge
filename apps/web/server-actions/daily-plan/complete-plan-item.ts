@@ -7,7 +7,6 @@
  * Returns { ok: true, doneCount } so the client can show a dopamine counter.
  */
 
-import { getServerSession } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 
 import { db } from '@focus-forge/database/client';
@@ -15,7 +14,7 @@ import { completeTodayItem } from '@focus-forge/domain/daily-plan/complete-today
 import { checkSpeedRunEligibility } from '@focus-forge/domain/timer/speed-run-hook';
 import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
 
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 
 export type CompletePlanItemResult =
   | { ok: true }
@@ -25,15 +24,15 @@ export async function completePlanItemAction(
   itemId: string,
   planId: string,
 ): Promise<CompletePlanItemResult> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return { ok: false, error: 'unauthenticated', message: 'Please sign in.' };
+  const auth = await requireUser('mutate_data');
+  if (!auth.ok) {
+    return { ok: false, error: auth.error, message: auth.message };
   }
 
   const result = await completeTodayItem(db, {
     itemId,
     planId,
-    userId: session.user.id,
+    userId: auth.userId,
   });
 
   if (!result.ok) {
@@ -44,11 +43,11 @@ export async function completePlanItemAction(
   // when 2+ tasks complete within 15 min. No-op unless the user opted in.
   try {
     const user = await db.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: auth.userId },
       select: { preferences: true },
     });
     const { speedRunChallengesEnabled } = parsePreferences(user?.preferences);
-    await checkSpeedRunEligibility(db, session.user.id, { enabled: speedRunChallengesEnabled });
+    await checkSpeedRunEligibility(db, auth.userId, { enabled: speedRunChallengesEnabled });
   } catch {
     // non-fatal — never block a completion on the hook
   }

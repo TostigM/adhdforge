@@ -8,11 +8,9 @@
  * The actual UX lands later; for now we just record the signal.
  */
 
-import { getServerSession } from 'next-auth';
-
 import { db } from '@focus-forge/database/client';
 import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
-import { authOptions } from '@/lib/auth';
+import { requireUser } from '@/lib/require-user';
 
 /**
  * Records a 10-minute movement-due signal during a focus session.
@@ -20,11 +18,11 @@ import { authOptions } from '@/lib/auth';
  * Logs the event and returns silently — no movement UI exists until M20.
  */
 export async function recordTenThreeMarkAction(sessionId: string): Promise<void> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return;
+  const auth = await requireUser('mutate_data');
+  if (!auth.ok) return;
 
   const user = await db.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: auth.userId },
     select: { preferences: true },
   });
   const { tenThreeRuleEnabled } = parsePreferences(user?.preferences);
@@ -32,7 +30,7 @@ export async function recordTenThreeMarkAction(sessionId: string): Promise<void>
 
   await db.event.create({
     data: {
-      userId: session.user.id,
+      userId: auth.userId,
       eventType: 'ten-three-rule:movement-due',
       payload: { focusSessionId: sessionId },
     },
