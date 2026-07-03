@@ -84,6 +84,15 @@ describe('POST /api/voice-dump', () => {
     expect(res.status).toBe(400);
   });
 
+  it('413 when the audio exceeds the 5 MB cap — and never calls OpenAI', async () => {
+    const oversized = audioRequest(new Array(5 * 1024 * 1024 + 1).fill(0));
+    const res = await POST(oversized);
+    expect(res.status).toBe(413);
+    const body = await res.json();
+    expect(body.error).toBe('audio_too_large');
+    expect(transcribeAudio).not.toHaveBeenCalled();
+  });
+
   it('502 when transcription fails', async () => {
     vi.mocked(transcribeAudio).mockRejectedValue(new Error('whisper down'));
     const res = await POST(audioRequest());
