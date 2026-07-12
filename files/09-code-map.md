@@ -1,6 +1,6 @@
 # Focus Forge — Code Map
 
-**Status:** Living document — generated Session 13 (2026-07-01), current through M8 + the Session 13 hardening pass (account-state guard, rate limits, env validation, dead-code removal).
+**Status:** Living document — current through M9 (Launchpad, Session 14) including the Session 13 hardening pass (account-state guard, rate limits, env validation, dead-code removal).
 **Purpose:** Maps every function in the codebase: which file defines it, what it does, and which pages/components consume it. Update when milestones add or retire code.
 
 Reading guide:
@@ -26,6 +26,7 @@ Reading guide:
 |---|---|---|---|
 | `plan-day.ts` | `getPlanDate()` | The plan-date label (UTC midnight of the Pacific calendar day) | `dashboard/page.tsx`, `update-preferences` action |
 | | `getPlanDayWindow()` | Real start/end instants of a Pacific day (DST-safe) | `seedAnchors` (internal) |
+| | `zonedTimeUtc()`, `calendarDateInZone()` | THE shared DST-safe wall-clock→UTC math (M9) | launchpad `reset-boundary` + `nightly-reminder` |
 | `get-or-create-today-plan.ts` | `getOrCreateTodayPlan()` | Find/create today's plan; seed anchors; run bubble-up | `dashboard/page.tsx` |
 | `get-today-view.ts` | `getTodayView()` + types (`TodayViewResult`, `TodayItem`, `ScheduledAnchor`, `QueueItem`, `DOORKNOB_MINUTES`) | Full Today screen data in one call | `dashboard/page.tsx`; types used by `TodayClient`, `TodayCard`, `MorningRitual` |
 | `_bubble-up.ts` | `bubbleUp()` (internal) | Refills flex slots from the unified backlog pool | `complete-today-item`, `swap-today-item`, `get-or-create-today-plan`, `add-to-today-plan` (domain-internal only) |
@@ -95,7 +96,22 @@ Reading guide:
 | `account-state.ts` | `canUserDo()`, `getRedirectForState()`, `getStateBanner()`, `isPauseExpired()` | Account-state capability rules | `lib/require-user.ts` (every action + page), cron `restoreExpiredPauses` (wired Session 13; `getStateBanner` still awaits a banner UI) |
 | `display-name.ts` | `getUserAddressName()`, `getUserAddressNameWithOAuth()` | Friendly address name | ⚠️ Unused in app |
 
-### 1.9 Admin (`admin/`)
+### 1.9 Launchpad (`launchpad/`) — M9
+
+| File | Function | What it does | Consumed by |
+|---|---|---|---|
+| `reset-boundary.ts` | `lastResetBoundary()` | Most recent 04:00 workday-time instant (pure, DST-safe) | `reset-launchpad` |
+| `reset-launchpad.ts` | `resetDailyItems()` | Lazy/cron uncheck of stale `daily` items (idempotent) | `list-items`, cron `runLaunchpadResets` |
+| | `resetOnDepartureItems()` | Uncheck `on_departure` items | `complete-session` doorknob action |
+| `list-items.ts` | `getLaunchpadItems()` | Lazy reset, then ordered read | `/launchpad` page, `dashboard/page.tsx` (widget), `doorknob/page.tsx` (prefill) |
+| `add-item.ts` | `addLaunchpadItem()` | Label 1–120, order max+1 | `add-item` action → **LaunchpadClient** |
+| `check-item.ts` | `checkLaunchpadItem()` | Check (stamps lastCheckedAt + event, transactional) / uncheck | `check-item` action → **LaunchpadClient** |
+| `update-item.ts` | `updateLaunchpadItem()` | Label / reset-schedule change | `update-item` action → **LaunchpadClient** |
+| `reorder-items.ts` | `reorderLaunchpadItems()` | Full ordered-id list, validated set | `reorder-items` action → **LaunchpadClient** |
+| `delete-item.ts` | `deleteLaunchpadItem()` | Ownership-checked delete | `delete-item` action → **LaunchpadClient** |
+| `nightly-reminder.ts` | `ensureNightlyReminder()`, `nextReminderInstant()` | Converges pending `launchpad_nightly` alert rows to one (self-healing) | `/launchpad` page (lazy), `set-nightly-reminder` action |
+
+### 1.10 Admin (`admin/`)
 
 | File | Function | What it does | Consumed by |
 |---|---|---|---|
@@ -127,6 +143,12 @@ All follow: `requireUser(capability)` (auth + account-state check — see `lib/r
 | `doorknob/complete-session.ts` | `completeDoorknobAction` | `completeDoorknob` | DoorknobClient |
 | `doorknob/cancel-session.ts` | `cancelDoorknobAction` | `cancelDoorknob` | DoorknobClient |
 | `users/update-preferences.ts` | `updatePreferencesAction` | `updateUserPreferences` (+ live plan slot update) | TodaySettingsClient, TimerSettingsClient |
+| `launchpad/add-item.ts` | `addLaunchpadItemAction` | `addLaunchpadItem` | LaunchpadClient |
+| `launchpad/check-item.ts` | `checkLaunchpadItemAction` | `checkLaunchpadItem` | LaunchpadClient |
+| `launchpad/update-item.ts` | `updateLaunchpadItemAction` | `updateLaunchpadItem` | LaunchpadClient |
+| `launchpad/reorder-items.ts` | `reorderLaunchpadItemsAction` | `reorderLaunchpadItems` | LaunchpadClient |
+| `launchpad/delete-item.ts` | `deleteLaunchpadItemAction` | `deleteLaunchpadItem` | LaunchpadClient |
+| `launchpad/set-nightly-reminder.ts` | `setNightlyReminderAction` | `updateUserPreferences` + `ensureNightlyReminder` | LaunchpadSettingsClient |
 | `admin/users/actions.ts` (in app dir) | `createUser` | inline Prisma + `logAdminAction` | admin/users/new |
 | `admin/users/[id]/actions.ts` (in app dir) | `pauseUser`, `unpauseUser`, `suspendUser`, `unsuspendUser`, `softDeleteUser`, `emergencyDeleteUser`, `sendPasswordReset`, `grantCompTier` | inline Prisma + `logAdminAction`/`captureUserState` | admin user detail sub-pages (form actions) |
 
@@ -142,7 +164,7 @@ All follow: `requireUser(capability)` (auth + account-state check — see `lib/r
 | `sync` | GET | Events since `?since=` for the user (max 200) | `lib/sync/use-sync-stream.ts` (5 s poll) |
 | `timer/complete` | POST | PiP pop-out ends its session as completed (idempotent; Zod-validated body) | `lib/pip/timer-pip.ts` |
 | `voice-dump` | POST | Auth → quota gate → Whisper → GPT parse → create tasks → increment quota (5 MB audio cap) | TodayClient (fetch, via VoiceDumpButton recording) |
-| `cron/hourly` | GET | Daily cron dispatcher (CRON_SECRET-gated); sweeps due `scheduled_alerts` + restores expired pauses | Vercel Cron (`0 8 * * *`) |
+| `cron/hourly` | GET | Daily cron dispatcher (CRON_SECRET-gated); sweeps due `scheduled_alerts`, restores expired pauses, resets launchpad items (all-users backstop) | Vercel Cron (`0 8 * * *`) |
 
 ---
 
@@ -153,13 +175,14 @@ All follow: `requireUser(capability)` (auth + account-state check — see `lib/r
 | `/` | — | — | Redirects → /dashboard or /signin |
 | `/signin`, `/signin/check-email` | — | signin form | NextAuth |
 | `/reset-password`, `/reset-password/[token]` | — | inline forms | `/api/auth/request-password-reset`, `/api/auth/reset-password` |
-| `/dashboard` | `requirePageUser` → `getOrCreateTodayPlan`, `getTodayView`, `getActiveDoorknob`, `parsePreferences` | **TodayClient** (+ TodayCard, MorningRitual) | create-task, complete-plan-item, swap-plan-item, add-to-plan, update-ritual, reframe-plan-item, `/api/voice-dump`, useSyncStream |
-| `/account` | direct Prisma + `parsePreferences` | TodaySettingsClient, TimerSettingsClient | update-preferences |
+| `/dashboard` | `requirePageUser` → `getOrCreateTodayPlan`, `getTodayView`, `getActiveDoorknob`, `getLaunchpadItems`, `parsePreferences` | **TodayClient** (+ TodayCard, MorningRitual; launchpad + doorknob summary cards) | create-task, complete-plan-item, swap-plan-item, add-to-plan, update-ritual, reframe-plan-item, `/api/voice-dump`, useSyncStream |
+| `/launchpad` | `requirePageUser` → `getLaunchpadItems` (lazy reset), `ensureNightlyReminder` | **LaunchpadClient** (useOptimistic) | launchpad actions ×5, useSyncStream, browser Notification |
+| `/account` | direct Prisma + `parsePreferences` | TodaySettingsClient, TimerSettingsClient, LaunchpadSettingsClient | update-preferences, set-nightly-reminder |
 | `/account/suspended` | direct Prisma (state check) | — | — |
 | `/tasks/[taskId]` | direct Prisma (task + steps) | **StepsEditor** | add-step, reorder-steps, delete-step |
 | `/walk/[taskId]` | direct Prisma (task + steps) | **WalkThrough** | complete-step |
 | `/timer` | `parsePreferences` | **TimerClient** | timer actions, hooks, sound-engine, timer-pip, wedge/sound/vibration domain |
-| `/doorknob` | `getActiveDoorknob` | **DoorknobSetup** / **DoorknobClient** | doorknob actions ×4, browser Notifications |
+| `/doorknob` | `getActiveDoorknob`, `getLaunchpadItems` (setup prefill) | **DoorknobSetup** / **DoorknobClient** | doorknob actions ×4 (complete also resets on-departure launchpad items), browser Notifications |
 | `/admin` + subroutes | direct Prisma + `getAdminPermissions` | ActionForm | admin actions (form actions, transactional audit) |
 | `/dev/test-plan` | server gate: `notFound()` in production | TestPlanClient | — |
 

@@ -138,7 +138,7 @@ adhdforge/
 │   ├── database/               # Prisma schema + singleton db client
 │   │   └── prisma/schema.prisma  ← canonical schema (spec: files/04-mysql-schema.md)
 │   ├── domain/                 # Pure business logic, no HTTP/React dependencies
-│   │                           #   incl. daily-plan, tasks, timer, quota
+│   │                           #   incl. daily-plan, tasks, timer, quota, doorknob, launchpad
 │   ├── ui/                     # Design system components (packages/ui/src/index.ts)
 │   ├── ai/                     # OpenAI (M7): transcribeAudio (Whisper), parseTasks (GPT-4o-mini)
 │   └── config/                 # Shared tsconfig presets
@@ -180,6 +180,9 @@ app/
 ├── doorknob/                   # Reverse Scheduler / Doorknob (M8)
 │   ├── page.tsx                # getActiveDoorknob → DoorknobSetup or DoorknobClient
 │   └── _components/            # DoorknobSetup (3 questions) + DoorknobClient (live timeline)
+├── launchpad/                  # Items by the door, daily reset (M9)
+│   ├── page.tsx                # Lazy reset + reminder healing → LaunchpadClient
+│   └── _components/LaunchpadClient.tsx  # Checklist (useOptimistic), reorder, schedule select
 ├── admin/                      # Admin console (gated by feature_grants)
 │   └── users/[id]/
 └── api/
@@ -193,6 +196,8 @@ app/
 **Voice Dump (M7):** `OPENAI_API_KEY` must be in `apps/web/.env.local` (set in Vercel for prod ✅). The `/api/voice-dump` route checks the daily quota (`checkQuota`, fail-open) *before* any paid OpenAI call; audio is never persisted (Rule 9). Quota helpers live in `@focus-forge/domain/quota/*`.
 
 **Doorknob (M8):** A session is persisted as its `scheduled_alerts` rows (no `doorknob_sessions` table) — see AGENTS.md §5.18. Domain in `@focus-forge/domain/doorknob/*`; zone notifications are client-side; the hourly cron (`/api/cron/hourly`) is the bookkeeping backstop and needs `CRON_SECRET` in env. An active session also surfaces as a calm summary card on the Today dashboard.
+
+**Launchpad (M9):** By-the-door checklist, `launchpad_items` table. Daily items reset **lazily on read** at the 04:00 Pacific boundary (`@focus-forge/domain/launchpad/*`; boundary math shares `zonedTimeUtc` from `plan-day.ts`), with the daily cron as the all-users backstop — never add a per-user reset cron. Doorknob setup prefils from unchecked items; completing a Doorknob resets `on_departure` items. The nightly reminder is opt-in (`launchpadReminderEnabled`, default off) — see AGENTS.md §5.19.
 
 All non-trivial logic lives in `server-actions/` or `packages/domain/` — pages are thin.
 
