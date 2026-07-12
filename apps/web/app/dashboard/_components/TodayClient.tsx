@@ -46,10 +46,17 @@ export type DoorknobSummary = {
   positionState: 'before_start' | 'in_zone' | 'arrived';
 };
 
+/** Compact launchpad summary for the Today widget (M9). */
+export type LaunchpadSummary = {
+  checked: number;
+  total: number;
+};
+
 export type TodayClientProps = {
   view: TodayViewResult;
   displayName: string;
   doorknob?: DoorknobSummary | null;
+  launchpad?: LaunchpadSummary | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,7 +125,7 @@ function QueueRow({ item }: { item: QueueItem }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TodayClient({ view, displayName, doorknob }: TodayClientProps) {
+export function TodayClient({ view, displayName, doorknob, launchpad }: TodayClientProps) {
   const router = useRouter();
   const { addToast } = useToast();
 
@@ -532,6 +539,34 @@ export function TodayClient({ view, displayName, doorknob }: TodayClientProps) {
               Open →
             </span>
           </div>
+        </Link>
+      )}
+
+      {/* ── Launchpad summary (only when items exist) ── */}
+      {launchpad && launchpad.total > 0 && (
+        <Link
+          href="/launchpad"
+          aria-label={`Launchpad: ${launchpad.checked} of ${launchpad.total} items by the door. Open the launchpad.`}
+          className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-3 hover:bg-[var(--bg-elevated)] transition-colors"
+        >
+          <p className="text-sm text-[var(--text-secondary)]">
+            <span aria-hidden="true">🎒</span>{' '}
+            {launchpad.checked === launchpad.total ? (
+              <span className="text-[var(--text-primary)] font-medium">
+                Launchpad ready — everything’s by the door
+              </span>
+            ) : (
+              <>
+                <span className="text-[var(--text-primary)] font-medium">
+                  {launchpad.checked} of {launchpad.total}
+                </span>{' '}
+                by the door
+              </>
+            )}
+          </p>
+          <span className="shrink-0 text-xs font-medium text-[var(--text-secondary)]" aria-hidden="true">
+            Open →
+          </span>
         </Link>
       )}
 

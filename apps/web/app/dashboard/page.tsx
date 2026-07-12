@@ -14,10 +14,15 @@ import { getOrCreateTodayPlan } from '@focus-forge/domain/daily-plan/get-or-crea
 import { getPlanDate } from '@focus-forge/domain/daily-plan/plan-day';
 import { getTodayView } from '@focus-forge/domain/daily-plan/get-today-view';
 import { getActiveDoorknob } from '@focus-forge/domain/doorknob/get-active-doorknob';
+import { getLaunchpadItems } from '@focus-forge/domain/launchpad/list-items';
 import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
 
 import { requirePageUser } from '@/lib/require-user';
-import { TodayClient, type DoorknobSummary } from './_components/TodayClient';
+import {
+  TodayClient,
+  type DoorknobSummary,
+  type LaunchpadSummary,
+} from './_components/TodayClient';
 
 export default async function DashboardPage() {
   const { userId } = await requirePageUser('/dashboard');
@@ -25,13 +30,14 @@ export default async function DashboardPage() {
   // Today's plan-day label (rolls over at midnight in the workday timezone)
   const planDate = getPlanDate();
 
-  const [user, plan, doorknobResult] = await Promise.all([
+  const [user, plan, doorknobResult, launchpadResult] = await Promise.all([
     db.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true, preferences: true },
     }),
     getOrCreateTodayPlan(db, userId, planDate),
     getActiveDoorknob(db, userId),
+    getLaunchpadItems(db, userId), // also applies the lazy daily reset
   ]);
 
   const { gentleReframeEnabled, gentleReframeThreshold } = parsePreferences(user?.preferences);
@@ -52,6 +58,14 @@ export default async function DashboardPage() {
         startAtIso: active.schedule.startAt.toISOString(),
         arrivalAtIso: active.schedule.arrivalAt.toISOString(),
         positionState: active.position.state,
+      }
+    : null;
+
+  // Launchpad widget data — only shown when the user has items.
+  const launchpad: LaunchpadSummary | null = launchpadResult.ok
+    ? {
+        checked: launchpadResult.value.filter((i) => i.isChecked).length,
+        total: launchpadResult.value.length,
       }
     : null;
 
@@ -80,6 +94,12 @@ export default async function DashboardPage() {
           🚪 Doorknob
         </Link>
         <Link
+          href="/launchpad"
+          className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+        >
+          🎒 Launchpad
+        </Link>
+        <Link
           href="/account"
           className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
         >
@@ -87,7 +107,7 @@ export default async function DashboardPage() {
         </Link>
       </nav>
 
-      <TodayClient view={view} displayName={displayName} doorknob={doorknob} />
+      <TodayClient view={view} displayName={displayName} doorknob={doorknob} launchpad={launchpad} />
     </div>
   );
 }
