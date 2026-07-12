@@ -26,6 +26,8 @@ import {
   getLatestPlanId,
   addQueueItems,
   getDoorknobAlerts,
+  createLaunchpadItem,
+  getLaunchpadItemsForUser,
 } from './test-user';
 
 // Worker process needs DATABASE_URL for direct DB seeding/reset
@@ -66,4 +68,6 @@ export {
   getLatestPlanId,
   addQueueItems,
   getDoorknobAlerts,
+  createLaunchpadItem,
+  getLaunchpadItemsForUser,
 };

@@ -223,6 +223,43 @@ export async function resetTestUserData(userId: string): Promise<void> {
   await db.focusSession.deleteMany({ where: { userId } });
   await db.userBadge.deleteMany({ where: { userId } }).catch(() => {});
   await db.scheduledAlert.deleteMany({ where: { userId } }).catch(() => {});
+  await db.launchpadItem.deleteMany({ where: { userId } }).catch(() => {});
+}
+
+/** Create a launchpad item directly in the DB (M9 specs). Returns the item id. */
+export async function createLaunchpadItem(
+  userId: string,
+  label: string,
+  opts: {
+    isChecked?: boolean;
+    lastCheckedAt?: Date;
+    resetSchedule?: 'never' | 'daily' | 'on_departure';
+    displayOrder?: number;
+  } = {},
+): Promise<string> {
+  const db = getPrisma();
+  const item = await db.launchpadItem.create({
+    data: {
+      userId,
+      label,
+      displayOrder: opts.displayOrder ?? 0,
+      isChecked: opts.isChecked ?? false,
+      lastCheckedAt: opts.lastCheckedAt ?? null,
+      resetSchedule: opts.resetSchedule ?? 'daily',
+    },
+    select: { id: true },
+  });
+  return item.id;
+}
+
+/** The user's launchpad items, in display order. */
+export async function getLaunchpadItemsForUser(userId: string) {
+  const db = getPrisma();
+  return db.launchpadItem.findMany({
+    where: { userId },
+    orderBy: { displayOrder: 'asc' },
+    select: { id: true, label: true, isChecked: true, resetSchedule: true, displayOrder: true },
+  });
 }
 
 /** All doorknob_zone alerts for the user (any status), oldest scheduled first. */
