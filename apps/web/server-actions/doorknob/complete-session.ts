@@ -10,6 +10,7 @@ import { revalidatePath } from 'next/cache';
 
 import { db } from '@focus-forge/database/client';
 import { completeDoorknob } from '@focus-forge/domain/doorknob/complete-doorknob';
+import { resetOnDepartureItems } from '@focus-forge/domain/launchpad/reset-launchpad';
 
 import { requireUser } from '@/lib/require-user';
 
@@ -31,7 +32,13 @@ export async function completeDoorknobAction(
     return { ok: false, error: result.error, message: result.message };
   }
 
+  // Out the door → launchpad items on the 'on_departure' schedule uncheck for
+  // next time (M9). Best-effort: the fn logs its own failures and the daily
+  // reset never depends on it.
+  await resetOnDepartureItems(db, auth.userId);
+
   revalidatePath('/doorknob');
   revalidatePath('/dashboard');
+  revalidatePath('/launchpad');
   return { ok: true, newBadges: result.value.newBadges };
 }

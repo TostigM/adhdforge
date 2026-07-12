@@ -5,7 +5,8 @@
  * ──────────────────────────────────────────────────────────────────────────────
  * 1. When do you need to be there?
  * 2. How long is the trip?
- * 3. What do you need to grab on the way out? (freeform; Launchpad lands in M9)
+ * 3. What do you need to grab on the way out? (freeform, with one-tap prefill
+ *    from the user's unchecked Launchpad items — M9)
  *
  * Calm copy, no urgency framing. The result is options, not orders.
  */
@@ -25,7 +26,7 @@ function toLocalInputValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function DoorknobSetup() {
+export function DoorknobSetup({ launchpadLabels = [] }: { launchpadLabels?: string[] }) {
   const router = useRouter();
   const { addToast } = useToast();
 
@@ -138,6 +139,23 @@ export function DoorknobSetup() {
           className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           placeholder={'keys\nwater bottle'}
         />
+        {launchpadLabels.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              // Append only labels not already in the list (case-insensitive).
+              const existing = new Set(
+                tasksText.split('\n').map((t) => t.trim().toLowerCase()).filter(Boolean),
+              );
+              const additions = launchpadLabels.filter((l) => !existing.has(l.toLowerCase()));
+              if (additions.length === 0) return;
+              setTasksText((prev) => (prev.trim() ? prev.replace(/\n?$/, '\n') : '') + additions.join('\n'));
+            }}
+            className="text-sm text-[var(--accent)] hover:underline"
+          >
+            🎒 Add from Launchpad ({launchpadLabels.length} unchecked)
+          </button>
+        )}
       </section>
 
       <Button onClick={handleStart} disabled={submitting}>

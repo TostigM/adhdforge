@@ -12,6 +12,7 @@ import { parsePreferences } from '@focus-forge/domain/users/update-preferences';
 import { requirePageUser } from '@/lib/require-user';
 import { TodaySettingsClient } from './_components/TodaySettingsClient';
 import { TimerSettingsClient } from './_components/TimerSettingsClient';
+import { LaunchpadSettingsClient } from './_components/LaunchpadSettingsClient';
 
 export default async function AccountPage() {
   const { userId } = await requirePageUser('/account');
@@ -92,6 +93,12 @@ export default async function AccountPage() {
         <TimerSettingsClient
           initialSoundEnabled={parsePreferences(user.preferences).soundEnabled}
           initialHapticsEnabled={parsePreferences(user.preferences).hapticsEnabled}
+        />
+
+        {/* Launchpad settings (M9.3 nightly reminder) */}
+        <LaunchpadSettingsClient
+          initialEnabled={parsePreferences(user.preferences).launchpadReminderEnabled}
+          initialTime={parsePreferences(user.preferences).launchpadReminderTime}
         />
 
         {/* Sign out */}

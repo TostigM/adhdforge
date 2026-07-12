@@ -12,6 +12,7 @@ import Link from 'next/link';
 
 import { db } from '@focus-forge/database/client';
 import { getActiveDoorknob } from '@focus-forge/domain/doorknob/get-active-doorknob';
+import { getLaunchpadItems } from '@focus-forge/domain/launchpad/list-items';
 
 import { requirePageUser } from '@/lib/require-user';
 import { DoorknobClient, type SerializedDoorknobSession } from './_components/DoorknobClient';
@@ -59,8 +60,19 @@ export default async function DoorknobPage() {
       </nav>
 
       <main className="mx-auto max-w-2xl px-4 py-8">
-        {serialized ? <DoorknobClient session={serialized} /> : <DoorknobSetup />}
+        {serialized ? (
+          <DoorknobClient session={serialized} />
+        ) : (
+          <DoorknobSetup launchpadLabels={await getUncheckedLaunchpadLabels(userId)} />
+        )}
       </main>
     </div>
   );
+}
+
+/** Unchecked launchpad items, offered as one-tap pre-departure checklist prefill (M9). */
+async function getUncheckedLaunchpadLabels(userId: string): Promise<string[]> {
+  const result = await getLaunchpadItems(db, userId);
+  if (!result.ok) return []; // the setup form works fine without the offer
+  return result.value.filter((i) => !i.isChecked).map((i) => i.label);
 }
