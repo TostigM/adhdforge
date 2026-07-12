@@ -22,10 +22,12 @@
 
 export const WORKDAY_TIMEZONE = 'America/Los_Angeles';
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
+// ─── Shared timezone helpers ──────────────────────────────────────────────────
+// Also used by the Launchpad reset boundary (launchpad/reset-boundary.ts) so
+// there is exactly ONE implementation of the DST-safe wall-clock→UTC math.
 
 /** Calendar date (year, month 1-12, day) of `at` in `timeZone`. */
-function calendarDateInZone(at: Date, timeZone: string): [number, number, number] {
+export function calendarDateInZone(at: Date, timeZone: string): [number, number, number] {
   // en-CA reliably formats as YYYY-MM-DD
   const ymd = at.toLocaleDateString('en-CA', { timeZone });
   const parts = ymd.split('-');
@@ -58,15 +60,28 @@ function tzOffsetMs(at: Date, timeZone: string): number {
 }
 
 /**
- * The real UTC instant of midnight on calendar date (y, m, d) in `timeZone`.
- * Two-pass offset correction handles DST transitions (the offset at the UTC
- * guess can differ from the offset at the corrected instant).
+ * The real UTC instant of wall-clock (hour:minute) on calendar date (y, m, d)
+ * in `timeZone`. Two-pass offset correction handles DST transitions (the
+ * offset at the UTC guess can differ from the offset at the corrected
+ * instant). `d` may be out of range (0, 32, …) — Date.UTC normalizes it.
  */
-function zonedMidnightUtc(y: number, m: number, d: number, timeZone: string): Date {
-  const utcGuess = Date.UTC(y, m - 1, d, 0, 0, 0);
+export function zonedTimeUtc(
+  y: number,
+  m: number,
+  d: number,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): Date {
+  const utcGuess = Date.UTC(y, m - 1, d, hour, minute, 0);
   let t = utcGuess - tzOffsetMs(new Date(utcGuess), timeZone);
   t = utcGuess - tzOffsetMs(new Date(t), timeZone);
   return new Date(t);
+}
+
+/** The real UTC instant of midnight on calendar date (y, m, d) in `timeZone`. */
+function zonedMidnightUtc(y: number, m: number, d: number, timeZone: string): Date {
+  return zonedTimeUtc(y, m, d, 0, 0, timeZone);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

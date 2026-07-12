@@ -40,7 +40,13 @@ function modelMock() {
 // This lets tests assert that operations inside $transaction were called.
 
 function makeTxMock(db: MockPrisma) {
-  return vi.fn().mockImplementation((cb: (tx: typeof db) => Promise<unknown>) => cb(db));
+  // Supports both Prisma forms: $transaction(callback) runs the callback with
+  // the same mock db; $transaction([promises]) awaits them all.
+  return vi
+    .fn()
+    .mockImplementation((arg: ((tx: typeof db) => Promise<unknown>) | Promise<unknown>[]) =>
+      Array.isArray(arg) ? Promise.all(arg) : arg(db),
+    );
 }
 
 // ─── Full mock ────────────────────────────────────────────────────────────────
@@ -57,6 +63,7 @@ export type MockPrisma = {
   focusSession: ReturnType<typeof modelMock>;
   quotaUsage: ReturnType<typeof modelMock>;
   scheduledAlert: ReturnType<typeof modelMock>;
+  launchpadItem: ReturnType<typeof modelMock>;
   $transaction: ReturnType<typeof vi.fn>;
   $queryRaw: ReturnType<typeof vi.fn>;
   $executeRaw: ReturnType<typeof vi.fn>;
@@ -75,6 +82,7 @@ export function makeMockPrisma(): MockPrisma & PrismaClient {
     focusSession: modelMock(),
     quotaUsage: modelMock(),
     scheduledAlert: modelMock(),
+    launchpadItem: modelMock(),
   } as unknown as MockPrisma;
 
   (mock as unknown as { $transaction: unknown }).$transaction = makeTxMock(mock);

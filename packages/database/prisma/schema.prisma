@@ -117,6 +117,7 @@ model User {
   quotaUsages                QuotaUsage[]
   focusSessions              FocusSession[]
   scheduledAlerts            ScheduledAlert[]
+  launchpadItems             LaunchpadItem[]
 
   @@index([accountState])
   @@index([pendingDeleteAt])
@@ -558,6 +559,40 @@ model ScheduledAlert {
   @@index([status, scheduledFor])
   @@index([userId, scheduledFor])
   @@map("scheduled_alerts")
+}
+
+// ─── Launchpad ────────────────────────────────────────────────────────────────
+// The user's daily "items by the door" (M9). See §4.11.
+// Reset model: lazy on read (most recent 04:00 workday-time boundary) with the
+// daily cron as an all-users backstop. resetTimeLocal is reserved for per-item
+// reset times once per-user timezones land (M15.3) — v1 treats it as 04:00.
+
+enum LaunchpadResetSchedule {
+  never
+  daily
+  on_departure
+}
+
+model LaunchpadItem {
+  id     String @id @default(cuid())
+  userId String @map("user_id") @db.VarChar(30)
+
+  label        String @db.VarChar(120)
+  displayOrder Int    @default(0) @map("display_order") @db.UnsignedSmallInt
+
+  isChecked     Boolean   @default(false) @map("is_checked")
+  lastCheckedAt DateTime? @map("last_checked_at")
+
+  resetSchedule  LaunchpadResetSchedule @default(daily) @map("reset_schedule")
+  resetTimeLocal DateTime?              @map("reset_time_local") @db.Time(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, displayOrder], map: "idx_launchpad_user_order")
+  @@map("launchpad_items")
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────

@@ -18,8 +18,31 @@
 import { NextResponse } from 'next/server';
 
 import { db } from '@focus-forge/database/client';
+import { resetDailyItems } from '@focus-forge/domain/launchpad/reset-launchpad';
 
 export const runtime = 'nodejs';
+
+/**
+ * Launchpad daily reset — the ALL-USERS backstop (M9, doc 04 §9).
+ * The launchpad read path already resets lazily for the viewing user; this
+ * sweep keeps the DB truthful for users who don't open the app. Idempotent:
+ * only items checked before the current 04:00 workday-time boundary flip.
+ */
+async function runLaunchpadResets(): Promise<{ reset: number }> {
+  const result = await resetDailyItems(db);
+  if (!result.ok) throw new Error(result.message ?? result.error);
+
+  if (result.value.reset > 0) {
+    await db.event.create({
+      data: {
+        userId: null, // system event
+        eventType: 'cron.launchpad_reset',
+        payload: { reset: result.value.reset },
+      },
+    });
+  }
+  return result.value;
+}
 
 /**
  * Restores accounts whose moderation pause has expired (doc 01 §4).
@@ -76,7 +99,8 @@ export async function GET(req: Request) {
   const results = await Promise.allSettled([
     runScheduledAlertsDue(),
     restoreExpiredPauses(),
-    // Future handlers per doc 04 §9: launchpad resets (M9), routine instances (M17),
+    runLaunchpadResets(),
+    // Future handlers per doc 04 §9: routine instances (M17),
     // account deletion purge (M15), comp tier expiration, token cleanup…
   ]);
 

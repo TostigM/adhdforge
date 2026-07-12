@@ -27,6 +27,9 @@ export type UserPreferences = {
   hapticsEnabled?: boolean;
   tenThreeRuleEnabled?: boolean;
   speedRunChallengesEnabled?: boolean;
+  // Launchpad (M9) — reminder is opt-in (never auto-enable notifications)
+  launchpadReminderEnabled?: boolean;
+  launchpadReminderTime?: string; // 'HH:MM' wall-clock in the workday timezone
 };
 
 export const PREFERENCE_DEFAULTS: Required<UserPreferences> = {
@@ -38,7 +41,13 @@ export const PREFERENCE_DEFAULTS: Required<UserPreferences> = {
   hapticsEnabled: true,
   tenThreeRuleEnabled: false,
   speedRunChallengesEnabled: false,
+  // Launchpad
+  launchpadReminderEnabled: false,
+  launchpadReminderTime: '21:00',
 };
+
+/** 'HH:MM' 24-hour wall-clock. */
+export const TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export type UpdatePreferencesError = 'user_not_found' | 'invalid_value' | 'db_error';
 
@@ -55,6 +64,13 @@ export function parsePreferences(raw: unknown): Required<UserPreferences> {
     hapticsEnabled: prefs.hapticsEnabled !== false,
     tenThreeRuleEnabled: prefs.tenThreeRuleEnabled === true,
     speedRunChallengesEnabled: prefs.speedRunChallengesEnabled === true,
+    // Launchpad — opt-in reminder; malformed times fall back to the default
+    launchpadReminderEnabled: prefs.launchpadReminderEnabled === true,
+    launchpadReminderTime:
+      typeof prefs.launchpadReminderTime === 'string' &&
+      TIME_OF_DAY_PATTERN.test(prefs.launchpadReminderTime)
+        ? prefs.launchpadReminderTime
+        : PREFERENCE_DEFAULTS.launchpadReminderTime,
   };
 }
 
@@ -68,6 +84,12 @@ function validate(update: UserPreferences): string | null {
   }
   if (update.gentleReframeThreshold !== undefined && (update.gentleReframeThreshold < 3 || update.gentleReframeThreshold > 7)) {
     return 'gentleReframeThreshold must be between 3 and 7.';
+  }
+  if (
+    update.launchpadReminderTime !== undefined &&
+    !TIME_OF_DAY_PATTERN.test(update.launchpadReminderTime)
+  ) {
+    return 'launchpadReminderTime must be HH:MM (24-hour).';
   }
   return null;
 }
