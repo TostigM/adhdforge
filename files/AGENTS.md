@@ -1079,6 +1079,8 @@ This summary check catches drift, missed context, and misunderstandings before a
 
 **Next milestone:** M10 (Praise Repository — trusted contacts record voice memos; R2 signed-URL storage; quotas). M9 is complete — ⏸ confirm before starting M10. M10 needs Cloudflare R2 credentials (human action: create the bucket + keys per doc 06 M10 setup walkthrough).
 
+**Enhancement backlog (owner-requested, doc 06 top section):** E1 choose-what-bubbles-up on postpone (small; suggested right after M10); E2 photo → "where should I start?" (vision extension of M13). Propose slots at pause points; don't build unprompted.
+
 **Critical dev rules:**
 - Use `prisma db push` (NOT `migrate dev`) — Bluehost has no shadow DB support
 - Plan day rolls over at midnight Pacific — ALWAYS use `getPlanDate()`/`getPlanDayWindow()` from `daily-plan/plan-day`, never `setUTCHours(0,0,0,0)` (§5.14.4)

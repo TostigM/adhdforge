@@ -88,6 +88,24 @@ POST-LAUNCH (deferred):
 
 ---
 
+## Enhancement Backlog (owner-requested)
+
+Ideas the product owner has requested that aren't part of an original milestone. Each gets a short design sketch here when captured, and full design + scheduling when it's picked up (agents: propose a slot at the next pause point; don't build unprompted).
+
+### E1: Choose what bubbles up when postponing a task *(requested 2026-07-12)*
+
+Today, "Push it back" auto-surfaces the next-ranked backlog task. The owner wants the OPTION to pick the replacement instead — a direct expression of the §13.5 "options not orders" principle.
+
+Sketch: after a swap, show the top few ranked candidates (same `[todaySwapCount, priorityLevel, updatedAt]` order the drawer uses) as a calm one-tap picker, with "just pick for me" as the default/first option so the zero-decision path stays intact. Picker must not become a decision trap: cap at ~3 candidates + the auto option. Touches `swap-today-item` / `_bubble-up` (bubble-up would need an optional preferred-task parameter) and TodayClient. No schema change expected. Suggested slot: small standalone enhancement after M10 (same pattern as the Session 12 Doorknob-on-Today enhancement).
+
+### E2: Photo of a task → "where should I start?" *(requested 2026-07-12)*
+
+Upload a photo of a physical task (e.g. a messy room) and have the AI suggest a calm starting point.
+
+Sketch: extends M13 (Decision Paralysis Breaker) with vision — same "help me start" job, new input mode. gpt-4o-mini accepts images; prompt returns ONE suggested first step (maybe 2–3 ordered steps), never a full overwhelming inventory, never judgmental language about the mess (Rule 5). Photo handled like Voice Dump audio (Rule 9 pattern): held in memory for the API call only, never persisted. Quota: reuse `ai_decision` (3/day free) or a new `ai_photo_start` key — decide at design time with the owner. Client: camera/file input on the task detail or breaker surface. Schedule with M13, as task 13.x.
+
+---
+
 # PHASE 1: FOUNDATION
 
 ## Milestone 1: Monorepo + Vercel + DB Connection
@@ -2251,6 +2269,10 @@ E2E:
 - Modal UI: two big buttons with the recommended steps
 - Selecting one creates a task_step and enters Walk-Through mode
 ```
+
+### 13.x Photo → "where should I start?" (owner-requested — see Enhancement Backlog E2)
+
+Vision input for the same "help me start" job: photograph a physical task (messy room), AI returns ONE calm starting point. Design details in the Enhancement Backlog at the top of this doc; full design happens when M13 is picked up.
 
 ### Tests
 - Trigger correctness
