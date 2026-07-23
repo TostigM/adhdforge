@@ -128,8 +128,12 @@ export function captureUserState(
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Convert an IPv4 or IPv6 string to a 4- or 16-byte Buffer. */
-function ipToBuffer(ip: string): Buffer | undefined {
+/**
+ * Convert an IPv4 or IPv6 string to a 4- or 16-byte Buffer.
+ * Exported since M10 — the praise upload route packs sender IPs with the SAME
+ * implementation (one source of truth for IP packing).
+ */
+export function ipToBuffer(ip: string): Buffer | undefined {
   try {
     if (ip.includes(':')) {
       // IPv6 — 16 bytes

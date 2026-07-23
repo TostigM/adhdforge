@@ -20,14 +20,27 @@ export const FREE_TIER_LIMITS: Record<QuotaKey, QuotaLimit> = {
   praise_play: 15,
 };
 
-/** Tiers that get unlimited AI/quota features. */
-const UNLIMITED_TIERS = new Set(['comp', 'paid', 'paid_lifetime']);
+/**
+ * Paid/comp-tier caps. Most keys are unlimited, but praise_play stays capped
+ * at 30/day even for Pro (doc 05 §2.2 / AGENTS.md §5.5) — the cap is a usage
+ * safeguard, not a monetization lever. Fixed in M10; before that the helper
+ * wrongly returned 'unlimited' for Pro praise plays.
+ */
+export const PAID_TIER_LIMITS: Record<QuotaKey, QuotaLimit> = {
+  voice_dump: 'unlimited',
+  ai_breakdown: 'unlimited',
+  ai_decision: 'unlimited',
+  praise_play: 30,
+};
+
+/** Tiers that resolve against PAID_TIER_LIMITS. */
+const PAID_TIERS = new Set(['comp', 'paid', 'paid_lifetime']);
 
 /**
  * Resolve the daily limit for a tier + quota key.
- * free / legacy_free → free-tier caps; comp / paid* → unlimited.
+ * free / legacy_free → free caps; comp / paid* → paid caps.
  */
 export function getQuotaLimit(tier: string, quotaKey: QuotaKey): QuotaLimit {
-  if (UNLIMITED_TIERS.has(tier)) return 'unlimited';
+  if (PAID_TIERS.has(tier)) return PAID_TIER_LIMITS[quotaKey];
   return FREE_TIER_LIMITS[quotaKey];
 }

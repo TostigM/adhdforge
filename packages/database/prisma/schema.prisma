@@ -118,6 +118,11 @@ model User {
   focusSessions              FocusSession[]
   scheduledAlerts            ScheduledAlert[]
   launchpadItems             LaunchpadItem[]
+  trustedContacts            TrustedContact[]
+  praiseMemos                PraiseMemo[]
+  contentReportsFiled        ContentReport[]        @relation("ContentReportsFiled")
+  contentReportsAgainst      ContentReport[]        @relation("ContentReportsAgainst")
+  contentReportsReviewed     ContentReport[]        @relation("ContentReportsReviewed")
 
   @@index([accountState])
   @@index([pendingDeleteAt])
@@ -593,6 +598,138 @@ model LaunchpadItem {
 
   @@index([userId, displayOrder], map: "idx_launchpad_user_order")
   @@map("launchpad_items")
+}
+
+// ─── Praise Repository (M10) ─────────────────────────────────────────────────
+// Trusted contacts record voice memos via account-less invite links. See
+// §4.9–4.10, doc 01 §10, and AGENTS.md §5.20 for the locked decisions.
+
+model TrustedContact {
+  id     String @id @default(cuid())
+  userId String @map("user_id") @db.VarChar(30)
+
+  displayName String @map("display_name") @db.VarChar(80)
+
+  // 256-bit invite token, SHA-256 hashed (raw token only ever lives in the link).
+  inviteTokenHash Bytes    @map("invite_token_hash") @db.Binary(32)
+  // D2: flat creation+7d expiry; no first-use tracking.
+  inviteExpiresAt DateTime @map("invite_expires_at")
+  memosRemaining  Int      @default(3) @map("memos_remaining") @db.UnsignedSmallInt
+
+  isRevoked Boolean   @default(false) @map("is_revoked")
+  revokedAt DateTime? @map("revoked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memos PraiseMemo[]
+
+  @@unique([inviteTokenHash], map: "uq_trusted_contacts_token")
+  @@index([userId], map: "idx_trusted_contacts_user")
+  @@map("trusted_contacts")
+}
+
+enum PraiseTranscriptStatus {
+  pending
+  completed
+  failed_skip
+}
+
+model PraiseMemo {
+  id               String @id @default(cuid())
+  userId           String @map("user_id") @db.VarChar(30)
+  trustedContactId String @map("trusted_contact_id") @db.VarChar(30)
+
+  senderDisplayName String @map("sender_display_name") @db.VarChar(80)
+
+  audioPath       String @map("audio_path") @db.VarChar(500)
+  audioDurationMs Int    @map("audio_duration_ms") @db.UnsignedInt
+  audioSizeBytes  Int    @map("audio_size_bytes") @db.UnsignedInt
+
+  // D5: 'pending' also means "free tier, not transcribed yet" — an upgrade can
+  // transcribe retroactively. 'failed_skip' is an actual failure, audio fine.
+  transcript       String?                @db.Text
+  transcriptStatus PraiseTranscriptStatus @default(pending) @map("transcript_status")
+
+  category String? @db.VarChar(80)
+
+  isArchived   Boolean   @default(false) @map("is_archived")
+  lastPlayedAt DateTime? @map("last_played_at")
+  playCount    Int       @default(0) @map("play_count") @db.UnsignedInt
+
+  // D4 (owner decision, AGENTS.md §5.20): sender IP kept 7 days for abuse
+  // investigation, then nulled by the daily cron. Never surfaced outside an
+  // admin content review.
+  senderIp Bytes? @map("sender_ip") @db.VarBinary(16)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trustedContact TrustedContact @relation(fields: [trustedContactId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_praise_memos_user_created")
+  @@index([userId, category], map: "idx_praise_memos_user_category")
+  @@map("praise_memos")
+}
+
+// ─── Content Reports (M10, §4.29) ─────────────────────────────────────────────
+// Reactive moderation only. A memo with an OPEN report (pending_review /
+// reviewing / resolved_action_taken) is hidden from the inbox by QUERY — there
+// is no hidden flag, so resolved_no_action restores visibility automatically.
+
+enum ContentReportType {
+  praise_memo
+  body_doubling_session
+  feedback_item
+  other
+}
+
+enum ContentReportReason {
+  inappropriate
+  harassment
+  spam
+  illegal
+  other
+}
+
+enum ContentReportStatus {
+  pending_review
+  reviewing
+  resolved_no_action
+  resolved_action_taken
+  duplicate
+}
+
+model ContentReport {
+  id String @id @default(cuid())
+
+  reporterUserId String  @map("reporter_user_id") @db.VarChar(30)
+  reportedUserId String? @map("reported_user_id") @db.VarChar(30)
+
+  contentType ContentReportType @map("content_type")
+  contentId   String?           @map("content_id") @db.VarChar(30)
+
+  reasonCategory ContentReportReason @map("reason_category")
+  reasonDetails  String?             @map("reason_details") @db.Text
+
+  status ContentReportStatus @default(pending_review)
+
+  reviewedByAdminId String?   @map("reviewed_by_admin_id") @db.VarChar(30)
+  reviewedAt        DateTime? @map("reviewed_at")
+  reviewNotes       String?   @map("review_notes") @db.Text
+  actionTaken       String?   @map("action_taken") @db.VarChar(80)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  reporter User  @relation("ContentReportsFiled", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  reported User? @relation("ContentReportsAgainst", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  reviewer User? @relation("ContentReportsReviewed", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt(sort: Desc)], map: "idx_reports_status_created")
+  @@index([reportedUserId, createdAt(sort: Desc)], map: "idx_reports_reported_user")
+  @@index([contentType, contentId], map: "idx_reports_content")
+  @@map("content_reports")
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────

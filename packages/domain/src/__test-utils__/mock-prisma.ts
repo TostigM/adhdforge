@@ -64,6 +64,9 @@ export type MockPrisma = {
   quotaUsage: ReturnType<typeof modelMock>;
   scheduledAlert: ReturnType<typeof modelMock>;
   launchpadItem: ReturnType<typeof modelMock>;
+  trustedContact: ReturnType<typeof modelMock>;
+  praiseMemo: ReturnType<typeof modelMock>;
+  contentReport: ReturnType<typeof modelMock>;
   $transaction: ReturnType<typeof vi.fn>;
   $queryRaw: ReturnType<typeof vi.fn>;
   $executeRaw: ReturnType<typeof vi.fn>;
@@ -83,6 +86,9 @@ export function makeMockPrisma(): MockPrisma & PrismaClient {
     quotaUsage: modelMock(),
     scheduledAlert: modelMock(),
     launchpadItem: modelMock(),
+    trustedContact: modelMock(),
+    praiseMemo: modelMock(),
+    contentReport: modelMock(),
   } as unknown as MockPrisma;
 
   (mock as unknown as { $transaction: unknown }).$transaction = makeTxMock(mock);
