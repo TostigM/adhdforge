@@ -100,6 +100,12 @@ export default async function DashboardPage() {
           🎒 Launchpad
         </Link>
         <Link
+          href="/praise"
+          className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+        >
+          💜 Praise
+        </Link>
+        <Link
           href="/account"
           className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
         >

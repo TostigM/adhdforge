@@ -50,8 +50,11 @@ export function middleware(request: NextRequest) {
   }
 
   // ── Protected app routes ───────────────────────────────────────────────────
+  // /praise is EXACT-match: the inbox (/praise) needs a session, but the
+  // sender page (/praise/<token>) is deliberately public — senders have no
+  // account, the invite token is their credential (M10, doc 01 §10).
   const protectedPaths = ['/dashboard', '/account', '/tasks', '/walk', '/timer', '/doorknob', '/launchpad'];
-  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
+  const isProtected = protectedPaths.some((p) => pathname.startsWith(p)) || pathname === '/praise';
 
   if (isProtected && !hasSessionCookie(request)) {
     const signInUrl = new URL('/signin', request.url);
