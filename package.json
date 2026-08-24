@@ -17,10 +17,11 @@
     "reset:test:hard": "node scripts/morning-reset.js --hard",
     "test:db": "tsx --env-file .env.local scripts/test-db-connection.ts",
     "test:openai": "tsx --env-file apps/web/.env.local scripts/test-openai.ts",
-    "test:r2": "tsx --env-file .env.local scripts/test-r2-connection.ts",
+    "test:r2": "tsx --env-file apps/web/.env.local scripts/test-r2-connection.ts",
     "test:resend": "tsx --env-file .env.local scripts/test-resend.ts"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1090.0",
     "@prisma/client": "^6.0.0",
     "prettier": "^3.3.0",
     "prisma": "^6.0.0",

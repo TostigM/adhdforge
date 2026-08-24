@@ -37,6 +37,12 @@ const envSchema = z.object({
 
   // Cron dispatcher auth (M8)
   CRON_SECRET: z.string().min(16, 'must be at least 16 chars (openssl rand -base64 32)'),
+
+  // Cloudflare R2 — praise audio storage (M10). Private bucket, signed URLs only.
+  R2_ACCOUNT_ID: z.string().min(1),
+  R2_ACCESS_KEY_ID: z.string().min(1),
+  R2_SECRET_ACCESS_KEY: z.string().min(1),
+  R2_BUCKET_NAME: z.string().min(1),
 });
 
 export function validateEnv(env: NodeJS.ProcessEnv = process.env): void {

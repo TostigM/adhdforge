@@ -19,6 +19,7 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@focus-forge/database/client';
 import { resetDailyItems } from '@focus-forge/domain/launchpad/reset-launchpad';
+import { purgeSenderIps } from '@focus-forge/domain/praise/purge-sender-ips';
 
 export const runtime = 'nodejs';
 
@@ -41,6 +42,16 @@ async function runLaunchpadResets(): Promise<{ reset: number }> {
       },
     });
   }
+  return result.value;
+}
+
+/**
+ * Praise sender-IP purge (M10, AGENTS.md §5.20 D4). The public sender page
+ * promises "kept 7 days for abuse review, then deleted" — this makes it true.
+ */
+async function runSenderIpPurge(): Promise<{ purged: number }> {
+  const result = await purgeSenderIps(db);
+  if (!result.ok) throw new Error(result.message ?? result.error);
   return result.value;
 }
 
@@ -100,6 +111,7 @@ export async function GET(req: Request) {
     runScheduledAlertsDue(),
     restoreExpiredPauses(),
     runLaunchpadResets(),
+    runSenderIpPurge(),
     // Future handlers per doc 04 §9: routine instances (M17),
     // account deletion purge (M15), comp tier expiration, token cleanup…
   ]);

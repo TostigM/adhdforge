@@ -16,12 +16,15 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1090.0",
+    "@aws-sdk/s3-request-presigner": "^3.1090.0",
     "@focus-forge/ai": "workspace:*",
     "@focus-forge/database": "workspace:*",
     "@focus-forge/domain": "workspace:*",
     "@focus-forge/ui": "workspace:*",
     "@next-auth/prisma-adapter": "^1.0.7",
     "@node-rs/argon2": "^2.0.2",
+    "@paralleldrive/cuid2": "^3.3.0",
     "next": "^15.1.0",
     "next-auth": "^4.24.14",
     "react": "^19.0.0",

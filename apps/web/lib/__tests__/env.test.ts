@@ -16,6 +16,10 @@ const validEnv = {
   RESEND_FROM_EMAIL: 'hello@focusforge.test',
   OPENAI_API_KEY: 'sk-test',
   CRON_SECRET: 'c'.repeat(44),
+  R2_ACCOUNT_ID: 'r2acct',
+  R2_ACCESS_KEY_ID: 'r2key',
+  R2_SECRET_ACCESS_KEY: 'r2secret',
+  R2_BUCKET_NAME: 'focus-forge-praise-dev',
 } as NodeJS.ProcessEnv;
 
 describe('validateEnv', () => {
