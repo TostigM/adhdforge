@@ -10,7 +10,7 @@
  * Playwright's storage state. NextAuth v4 database sessions read this directly.
  */
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
 export const TEST_USER_EMAIL = 'e2e@focusforge.test';
@@ -224,6 +224,66 @@ export async function resetTestUserData(userId: string): Promise<void> {
   await db.userBadge.deleteMany({ where: { userId } }).catch(() => {});
   await db.scheduledAlert.deleteMany({ where: { userId } }).catch(() => {});
   await db.launchpadItem.deleteMany({ where: { userId } }).catch(() => {});
+  await db.contentReport.deleteMany({ where: { reporterUserId: userId } }).catch(() => {});
+  await db.praiseMemo.deleteMany({ where: { userId } }).catch(() => {});
+  await db.trustedContact.deleteMany({ where: { userId } }).catch(() => {});
+}
+
+// ─── Praise helpers (M10) ─────────────────────────────────────────────────────
+
+/** Create a trusted contact directly. Returns the RAW token for the sender page. */
+export async function createPraiseContact(
+  userId: string,
+  displayName: string,
+  opts: { memosRemaining?: number; expiresAt?: Date } = {},
+): Promise<{ contactId: string; rawToken: string }> {
+  const db = getPrisma();
+  const raw = randomBytes(32);
+  const hash = createHash('sha256').update(raw).digest();
+  const contact = await db.trustedContact.create({
+    data: {
+      userId,
+      displayName,
+      inviteTokenHash: new Uint8Array(hash),
+      inviteExpiresAt: opts.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      memosRemaining: opts.memosRemaining ?? 3,
+    },
+    select: { id: true },
+  });
+  return { contactId: contact.id, rawToken: raw.toString('hex') };
+}
+
+/** Seed a memo row directly (no R2 object — fine for list/quota/report specs). */
+export async function seedPraiseMemo(
+  userId: string,
+  trustedContactId: string,
+  over: { senderDisplayName?: string; isArchived?: boolean; createdAt?: Date } = {},
+): Promise<string> {
+  const db = getPrisma();
+  const memo = await db.praiseMemo.create({
+    data: {
+      userId,
+      trustedContactId,
+      senderDisplayName: over.senderDisplayName ?? 'Mom',
+      audioPath: `praise/${userId}/e2e-${Math.random().toString(36).slice(2, 10)}.webm`,
+      audioDurationMs: 12_000,
+      audioSizeBytes: 40_000,
+      isArchived: over.isArchived ?? false,
+      ...(over.createdAt ? { createdAt: over.createdAt } : {}),
+    },
+    select: { id: true },
+  });
+  return memo.id;
+}
+
+/** All praise memos for the user, oldest first. */
+export async function getPraiseMemosForUser(userId: string) {
+  const db = getPrisma();
+  return db.praiseMemo.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, senderDisplayName: true, isArchived: true, audioPath: true },
+  });
 }
 
 /** Create a launchpad item directly in the DB (M9 specs). Returns the item id. */

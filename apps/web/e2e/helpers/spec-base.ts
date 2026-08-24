@@ -28,6 +28,9 @@ import {
   getDoorknobAlerts,
   createLaunchpadItem,
   getLaunchpadItemsForUser,
+  createPraiseContact,
+  seedPraiseMemo,
+  getPraiseMemosForUser,
 } from './test-user';
 
 // Worker process needs DATABASE_URL for direct DB seeding/reset
@@ -70,4 +73,7 @@ export {
   getDoorknobAlerts,
   createLaunchpadItem,
   getLaunchpadItemsForUser,
+  createPraiseContact,
+  seedPraiseMemo,
+  getPraiseMemosForUser,
 };
