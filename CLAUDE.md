@@ -183,6 +183,9 @@ app/
 ├── launchpad/                  # Items by the door, daily reset (M9)
 │   ├── page.tsx                # Lazy reset + reminder healing → LaunchpadClient
 │   └── _components/LaunchpadClient.tsx  # Checklist (useOptimistic), reorder, schedule select
+├── praise/                     # Praise Repository (M10)
+│   ├── page.tsx                # Inbox (quota-gated playback, Pro transcript gate)
+│   └── [token]/                # PUBLIC sender page — no account, token = credential
 ├── admin/                      # Admin console (gated by feature_grants)
 │   └── users/[id]/
 └── api/
@@ -198,6 +201,8 @@ app/
 **Doorknob (M8):** A session is persisted as its `scheduled_alerts` rows (no `doorknob_sessions` table) — see AGENTS.md §5.18. Domain in `@focus-forge/domain/doorknob/*`; zone notifications are client-side; the hourly cron (`/api/cron/hourly`) is the bookkeeping backstop and needs `CRON_SECRET` in env. An active session also surfaces as a calm summary card on the Today dashboard.
 
 **Launchpad (M9):** By-the-door checklist, `launchpad_items` table. Daily items reset **lazily on read** at the 04:00 Pacific boundary (`@focus-forge/domain/launchpad/*`; boundary math shares `zonedTimeUtc` from `plan-day.ts`), with the daily cron as the all-users backstop — never add a per-user reset cron. Doorknob setup prefils from unchecked items; completing a Doorknob resets `on_departure` items. The nightly reminder is opt-in (`launchpadReminderEnabled`, default off) — see AGENTS.md §5.19.
+
+**Praise Repository (M10):** Trusted contacts record memos via account-less `/praise/[token]` links (middleware protects `/praise` EXACT-match only — the token page is deliberately public). Audio lives in a private R2 bucket, server-mediated uploads, signed URLs only (`apps/web/lib/r2.ts`; R2_* env vars REQUIRED at boot). Memos hidden on report are derived BY QUERY from open `content_reports` — never add a hidden flag. Sender IPs purge after 7 days via cron (owner decision D4). AWS SDK packages must stay on ONE exact version. See AGENTS.md §5.20.
 
 All non-trivial logic lives in `server-actions/` or `packages/domain/` — pages are thin.
 

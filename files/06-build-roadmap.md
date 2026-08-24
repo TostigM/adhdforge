@@ -1749,8 +1749,8 @@ E2E:
 - The recipient's name takes precedence in case of ambiguity (per doc 01 §10.2)
 - Sender records up to 3 memos within 7 days of first use
 - Audio uploaded to Cloudflare R2 storage (not Vercel Blob)
-- Token expires 7 days after first use OR after 3 memos
-- Sender IP logged briefly for rate-limit abuse detection, discarded after 24h
+- Token expires 7 days after creation OR after 3 memos (AGENTS.md §5.20 D2)
+- Sender IP retained 7 days with the memo for abuse investigation, then purged by cron (AGENTS.md §5.20 D4 — supersedes the original 24h rule)
 - Sender's email is NOT collected
 ```
 

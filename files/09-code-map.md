@@ -1,6 +1,6 @@
 # Focus Forge — Code Map
 
-**Status:** Living document — current through M9 (Launchpad, Session 14) including the Session 13 hardening pass (account-state guard, rate limits, env validation, dead-code removal).
+**Status:** Living document — current through M10 (Praise Repository, Session 15).
 **Purpose:** Maps every function in the codebase: which file defines it, what it does, and which pages/components consume it. Update when milestones add or retire code.
 
 Reading guide:
@@ -111,7 +111,24 @@ Reading guide:
 | `delete-item.ts` | `deleteLaunchpadItem()` | Ownership-checked delete | `delete-item` action → **LaunchpadClient** |
 | `nightly-reminder.ts` | `ensureNightlyReminder()`, `nextReminderInstant()` | Converges pending `launchpad_nightly` alert rows to one (self-healing) | `/launchpad` page (lazy), `set-nightly-reminder` action |
 
-### 1.10 Admin (`admin/`)
+### 1.10 Praise (`praise/`) — M10
+
+| File | Function | What it does | Consumed by |
+|---|---|---|---|
+| `invite-token.ts` | `generateInviteToken()`, `hashInviteToken()` | 256-bit tokens, SHA-256 at rest (pure) | create/verify invite |
+| `create-invite.ts` | `createPraiseInvite()` | 5-contact free cap; raw token returned once | `create-invite` action → **PraiseSendersClient** |
+| `verify-invite.ts` | `verifyPraiseInvite()` | One calm message for every failure mode | `/praise/[token]` page, upload route, submit-memo |
+| `revoke-invite.ts` | `revokePraiseContact()` | Deletes memos in-tx; returns R2 keys | `revoke-contact` action |
+| `submit-memo.ts` | `submitPraiseMemo()` | 60s cap, atomic slot spend, recipient-name precedence, free auto-archive at 3 | `/api/praise/upload` |
+| `list-inbox.ts` | `getPraiseInbox()` | Open-report memos hidden BY QUERY (no flag) | `/praise` page |
+| `list-contacts.ts` | `listTrustedContacts()` | Senders + memo counts + link liveness | `/account/praise-senders` page |
+| `play-memo.ts` | `playPraiseMemo()`, `PLAY_QUOTA_SOFT_MESSAGE` | Quota gate (15/30) before grant; meters on play_started | `/api/praise/play/[memoId]` |
+| `report-memo.ts` | `reportPraiseMemo()` | Creates content_report; dedupes open ones | `report-memo` action → inbox modal |
+| `set-memo-category.ts` | `setMemoCategory()`, `MEMO_CATEGORIES` | Listening-moment categories | `set-category` action |
+| `purge-sender-ips.ts` | `purgeSenderIps()` | Nulls sender IPs >7 days (D4) | cron `runSenderIpPurge` |
+| `admin-review.ts` | `listOpenReports()`, `getReportForReview()`, `resolveReport()` | Content reachable only via open reports; removal deletes memo + returns key | `/admin/reports` pages + actions |
+
+### 1.11 Admin (`admin/`)
 
 | File | Function | What it does | Consumed by |
 |---|---|---|---|
@@ -149,6 +166,10 @@ All follow: `requireUser(capability)` (auth + account-state check — see `lib/r
 | `launchpad/reorder-items.ts` | `reorderLaunchpadItemsAction` | `reorderLaunchpadItems` | LaunchpadClient |
 | `launchpad/delete-item.ts` | `deleteLaunchpadItemAction` | `deleteLaunchpadItem` | LaunchpadClient |
 | `launchpad/set-nightly-reminder.ts` | `setNightlyReminderAction` | `updateUserPreferences` + `ensureNightlyReminder` | LaunchpadSettingsClient |
+| `praise/create-invite.ts` | `createPraiseInviteAction` | `createPraiseInvite` (+ builds the share URL) | PraiseSendersClient |
+| `praise/revoke-contact.ts` | `revokePraiseContactAction` | `revokePraiseContact` + R2 delete | PraiseSendersClient |
+| `praise/report-memo.ts` | `reportPraiseMemoAction` | `reportPraiseMemo` | PraiseInboxClient |
+| `praise/set-category.ts` | `setMemoCategoryAction` | `setMemoCategory` | PraiseInboxClient |
 | `admin/users/actions.ts` (in app dir) | `createUser` | inline Prisma + `logAdminAction` | admin/users/new |
 | `admin/users/[id]/actions.ts` (in app dir) | `pauseUser`, `unpauseUser`, `suspendUser`, `unsuspendUser`, `softDeleteUser`, `emergencyDeleteUser`, `sendPasswordReset`, `grantCompTier` | inline Prisma + `logAdminAction`/`captureUserState` | admin user detail sub-pages (form actions) |
 
@@ -164,7 +185,9 @@ All follow: `requireUser(capability)` (auth + account-state check — see `lib/r
 | `sync` | GET | Events since `?since=` for the user (max 200) | `lib/sync/use-sync-stream.ts` (5 s poll) |
 | `timer/complete` | POST | PiP pop-out ends its session as completed (idempotent; Zod-validated body) | `lib/pip/timer-pip.ts` |
 | `voice-dump` | POST | Auth → quota gate → Whisper → GPT parse → create tasks → increment quota (5 MB audio cap) | TodayClient (fetch, via VoiceDumpButton recording) |
-| `cron/hourly` | GET | Daily cron dispatcher (CRON_SECRET-gated); sweeps due `scheduled_alerts`, restores expired pauses, resets launchpad items (all-users backstop) | Vercel Cron (`0 8 * * *`) |
+| `cron/hourly` | GET | Daily cron dispatcher (CRON_SECRET-gated); sweeps due `scheduled_alerts`, restores expired pauses, resets launchpad items, purges praise sender IPs >7d | Vercel Cron (`0 8 * * *`) |
+| `praise/upload` | POST | PUBLIC — token verify → 2MB cap → R2 put → Pro transcription → submit (failed submit deletes the object) | `/praise/[token]` sender page (fetch) |
+| `praise/play/[memoId]` | POST | Quota gate → 1-hour signed R2 URL (`read_data` — paused accounts can still listen) | PraiseInboxClient (fetch) |
 
 ---
 
@@ -183,6 +206,10 @@ All follow: `requireUser(capability)` (auth + account-state check — see `lib/r
 | `/walk/[taskId]` | direct Prisma (task + steps) | **WalkThrough** | complete-step |
 | `/timer` | `parsePreferences` | **TimerClient** | timer actions, hooks, sound-engine, timer-pip, wedge/sound/vibration domain |
 | `/doorknob` | `getActiveDoorknob`, `getLaunchpadItems` (setup prefill) | **DoorknobSetup** / **DoorknobClient** | doorknob actions ×4 (complete also resets on-departure launchpad items), browser Notifications |
+| `/praise` | `requirePageUser` → `getPraiseInbox` + tier | **PraiseInboxClient** (play, speeds, categories, report modal, Pro transcript gate) | play API, report-memo, set-category, useSyncStream |
+| `/praise/[token]` | PUBLIC — `verifyPraiseInvite` | **PraiseSenderClient** (MediaRecorder ≤60s, preview, privacy fine print) | `/api/praise/upload` |
+| `/account/praise-senders` | `requirePageUser` → `listTrustedContacts` + tier | **PraiseSendersClient** (one-time link reveal, revoke confirm) | create-invite, revoke-contact |
+| `/admin/reports` + `[id]` | `admin_content_moderate` gate (404 otherwise); review page logs `content.review_memo` per access + 30-min signed URL | ResolveForm | `resolveReportAction` (notes required; removal deletes memo + R2 object) |
 | `/admin` + subroutes | direct Prisma + `getAdminPermissions` | ActionForm | admin actions (form actions, transactional audit) |
 | `/dev/test-plan` | server gate: `notFound()` in production | TestPlanClient | — |
 
@@ -194,7 +221,8 @@ Shared server/client plumbing:
 |---|---|---|
 | `lib/auth.ts` | `authOptions` (NextAuth config; rate-limited credentials AND magic-link sends) | Every auth check |
 | `lib/require-user.ts` | `requireUser(capability)`, `requirePageUser()` — auth + account-state guard (Session 13) | Every server action, mutating API route, and protected page |
-| `lib/env.ts` + `instrumentation.ts` | `validateEnv()` — Zod env schema, fails the boot loudly (Session 13) | Server startup |
+| `lib/env.ts` + `instrumentation.ts` | `validateEnv()` — Zod env schema incl. R2 vars (M10), fails the boot loudly | Server startup |
+| `lib/r2.ts` | `putPraiseAudio()`, `getPlaybackUrl()` (1h), `getReviewUrl()` (30min), `deletePraiseAudio()` | Praise routes/actions + admin review |
 | `lib/sync/use-sync-stream.ts` | `useSyncStream()` | TodayClient |
 | `lib/audio/sound-engine.ts` | `unlockAudio()`, `playVariation()` | TimerClient |
 | `lib/pip/timer-pip.ts` | `openTimerPiP()` | TimerClient |

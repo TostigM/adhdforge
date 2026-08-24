@@ -424,7 +424,7 @@ Why this order: the recipient might invite "Mom" but Mom enters "Patricia Anders
 Other sender privacy rules:
 - Senders DO NOT need to create accounts on Focus Forge
 - Senders' email is NOT collected (privacy-by-default)
-- Senders' IP is NOT logged with the memo (only briefly for rate-limit abuse detection, then discarded after 24h)
+- Senders' IP is retained for **7 days** alongside the memo for abuse investigation (an abusive memo may not be seen until the recipient next logs in), then automatically purged by the daily cron. It is never shown to the recipient and never used for anything but abuse review. *(Owner decision 2026-07-14, AGENTS.md §5.20 D4 — supersedes the original 24-hour rule.)*
 - Senders are anonymous to other Focus Forge users; only the recipient knows they exist
 
 ---
