@@ -43,6 +43,7 @@ export default async function AdminDashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <QuickLink href="/admin/users" label="Browse users" description="Search and manage user accounts" />
           <QuickLink href="/admin/audit-log" label="Audit log" description="View all admin actions" />
+          <QuickLink href="/admin/reports" label="Content reports" description="Review reported praise memos" />
         </div>
       </div>
 
